@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16120d">
+<title>Stack — supplement timing & dose</title>
+<link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f0ede6;--bg:#16120d;--panel:#201a11;--panel-2:#271f15;--white:#f4f1ea;
+    --grey:rgba(244,241,234,.58);--grey-dim:rgba(244,241,234,.38);--line:rgba(244,241,234,.10);
+    --orange:#e8580a;--mono:ui-monospace,"SFMono-Regular","SF Mono",Menlo,monospace;
+    --sans:"Switzer",-apple-system,BlinkMacSystemFont,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-font-smoothing:antialiased}
+  body{background:var(--cream);font-family:var(--sans);min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center}
+
+  /* App is a real, full-height column. On wider screens it sits as a centred panel on the cream canvas. */
+  .app{width:100%;max-width:440px;height:100vh;height:100dvh;background:var(--bg);
+    display:flex;flex-direction:column;overflow:hidden;position:relative}
+  @media(min-width:480px){
+    body{padding:32px 16px}
+    .app{height:min(880px,calc(100dvh - 64px));border-radius:42px;
+      box-shadow:0 2px 4px rgba(24,21,15,.18),0 40px 80px -34px rgba(24,21,15,.5)}
+  }
+
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:max(18px,env(safe-area-inset-top)) 24px 6px;flex:none}
+  .logo{display:flex;align-items:center;gap:9px;color:var(--white)}
+  .logo .grid{display:grid;grid-template-columns:1fr 1fr;gap:2.5px}
+  .logo .grid b{width:6px;height:6px;background:var(--white);border-radius:1.5px;display:block}
+  .logo .wm{font-size:19px;font-weight:400;letter-spacing:.01em}
+  .appbar .av{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--grey);font-size:12px;font-weight:600;background:none;cursor:pointer}
+
+  .scroll{flex:1;overflow-y:auto;padding:14px 22px 122px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .scroll::-webkit-scrollbar{display:none}
+  .view{display:none}
+  .view.active{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+
+  h1{color:var(--white);font-weight:700;font-size:30px;line-height:1.04;letter-spacing:-.025em;margin:6px 0 22px}
+  h1 .o{color:var(--orange)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey-dim);margin:6px 0 14px}
+
+  .add{display:flex;gap:7px;margin-bottom:11px}
+  .add input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:14px;padding:11px 17px;outline:none}
+  .add input::placeholder{color:var(--grey-dim)}
+  .add input:focus{border-color:rgba(244,241,234,.3)}
+  .add button{background:var(--orange);color:#fff;border:none;border-radius:100px;font-family:var(--sans);font-size:14px;font-weight:600;padding:0 18px;cursor:pointer}
+  .quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:26px}
+  .quick .chip{background:transparent;border:1px solid var(--line);border-radius:100px;color:var(--grey);font-family:var(--sans);font-size:12.5px;padding:6px 12px;cursor:pointer}
+  .quick .chip:hover{border-color:rgba(244,241,234,.28)}
+  .quick .chip:active{border-color:var(--orange);color:var(--orange)}
+
+  .block{background:var(--panel);border:1px solid var(--line);border-radius:26px;padding:18px 18px 8px;margin-bottom:12px;animation:rise .3s cubic-bezier(.22,.61,.36,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  .bhead{display:flex;align-items:baseline;gap:9px;margin-bottom:6px}
+  .btime{font-size:20px;font-weight:700;color:var(--white);letter-spacing:-.02em;font-family:var(--mono)}
+  .blabel{font-size:13px;font-weight:600;color:var(--white);display:flex;align-items:center;gap:6px}
+  .blabel.sig::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--orange)}
+  .bdesc{font-size:11px;color:var(--grey-dim);margin-left:auto;font-family:var(--mono);letter-spacing:.02em}
+
+  .row{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .row:hover .nm{color:#fff}
+  .dot{width:15px;height:15px;border-radius:50%;flex:none;margin-top:2px;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+  .dot.softgel{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.7),transparent 55%),var(--c)}
+  .dot.capsule{background:linear-gradient(90deg,var(--c) 0 50%,var(--c2) 50% 100%)}
+  .dot.tablet{background:var(--c)}
+  .dot.tablet::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:1px;background:rgba(0,0,0,.22)}
+  .dot.powder{background:var(--c)}
+  .dot.powder::after{content:"";position:absolute;inset:3px;border-radius:50%;border:1px dotted rgba(0,0,0,.25)}
+  .rmain{flex:1;min-width:0}
+  .rtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .nm{font-size:14px;color:var(--white);font-weight:500}
+  .micro{font-size:11px;color:var(--grey-dim)}
+  .rmeta{display:flex;align-items:center;gap:9px;margin-top:3px;flex-wrap:wrap}
+  .dose{font-family:var(--mono);font-size:11px;color:var(--grey)}
+  .adq{font-family:var(--mono);font-size:10px;letter-spacing:.04em;display:flex;align-items:center;gap:4px}
+  .adq.ok{color:var(--grey-dim)}
+  .adq.low{color:var(--orange)}
+  .x{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);color:var(--grey-dim);background:none;font-size:12px;line-height:1;cursor:pointer;flex:none;margin-top:1px}
+  .x:hover{color:var(--grey)}
+  .x:active{color:var(--orange);border-color:var(--orange)}
+
+  .note{display:flex;gap:11px;border-radius:20px;padding:13px 15px;margin:6px 0 10px;animation:rise .3s ease}
+  .note.caution{background:rgba(232,88,10,.07);border:1px solid rgba(232,88,10,.32)}
+  .note.synergy{background:var(--panel-2);border:1px solid var(--line)}
+  .note .mk{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px;white-space:nowrap}
+  .note.caution .mk{color:var(--orange)}
+  .note.synergy .mk{color:var(--grey-dim)}
+  .note p{font-size:12.5px;line-height:1.5;color:var(--grey)}
+  .note b{color:var(--white);font-weight:600}
+
+  .empty{text-align:center;color:var(--grey-dim);font-size:13px;line-height:1.6;padding:40px 10px}
+  .empty b{color:var(--grey);font-weight:500}
+
+  .disc{font-size:10.5px;color:var(--grey-dim);line-height:1.5;margin-top:18px}
+
+  /* Stack (browse) view */
+  .search{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:14px;padding:11px 17px;outline:none;margin-bottom:16px}
+  .search::placeholder{color:var(--grey-dim)}
+  .search:focus{border-color:rgba(244,241,234,.3)}
+  .libsec{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey-dim);margin:16px 0 8px}
+  .lib{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer}
+  .lib .rmain{flex:1}
+  .lib .toggle{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);color:var(--grey-dim);background:none;font-size:14px;line-height:1;flex:none;display:grid;place-items:center;cursor:pointer}
+  .lib.in .toggle{background:var(--orange);border-color:var(--orange);color:#fff}
+
+  /* You view */
+  .stat{display:flex;align-items:baseline;gap:8px;margin:4px 0 24px}
+  .stat .n{font-size:44px;font-weight:700;color:var(--white);letter-spacing:-.03em;font-family:var(--mono)}
+  .stat .l{font-size:13px;color:var(--grey)}
+  .panelcard{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:16px 17px;margin-bottom:12px}
+  .panelcard h3{font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px}
+  .panelcard p{font-size:12px;line-height:1.55;color:var(--grey)}
+  .btn-out{background:transparent;border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:13px;font-weight:500;padding:11px 18px;cursor:pointer;margin-top:4px}
+  .btn-out:hover{border-color:rgba(244,241,234,.3)}
+  .btn-out.danger:active{border-color:var(--orange);color:var(--orange)}
+
+  .tabbar{position:absolute;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(20,16,11,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:100px;padding:7px;display:flex;gap:4px;z-index:30}
+  .tab{display:flex;align-items:center;gap:7px;border-radius:100px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--grey);background:none;border:none;cursor:pointer}
+  .tab.active{background:var(--orange);color:#fff;font-weight:600}
+  .tab svg{width:15px;height:15px}
+
+  /* Detail sheet */
+  #overlay{position:absolute;inset:0;z-index:50;pointer-events:none}
+  #overlay .scrim{position:absolute;inset:0;background:rgba(8,6,4,.55);opacity:0;transition:opacity .25s}
+  #overlay .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);
+    border-radius:30px 30px 0 0;padding:10px 24px max(28px,env(safe-area-inset-bottom));max-height:88%;overflow-y:auto;
+    transform:translateY(101%);transition:transform .32s cubic-bezier(.22,.61,.36,1);scrollbar-width:none;outline:none}
+  #overlay .sheet::-webkit-scrollbar{display:none}
+  #overlay.open{pointer-events:auto}
+  #overlay.open .scrim{opacity:1}
+  #overlay.open .sheet{transform:translateY(0)}
+  @media(min-width:480px){#overlay .sheet{border-radius:30px 30px 42px 42px}}
+  .handle{width:38px;height:4px;border-radius:100px;background:var(--line);margin:4px auto 18px}
+  .sh-head{display:flex;align-items:center;gap:13px;margin-bottom:14px}
+  .sh-head .dot{width:20px;height:20px;margin-top:0}
+  .sh-name{font-size:22px;font-weight:700;color:var(--white);letter-spacing:-.02em;line-height:1.1}
+  .sh-dose{font-family:var(--mono);font-size:13px;color:var(--grey);margin-top:3px}
+  .verdict{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .verdict.ok{color:var(--white)}
+  .verdict.low{color:var(--orange)}
+  .verdict .vg{font-family:var(--mono);font-size:16px}
+  .sh-label{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--grey-dim);margin-top:18px}
+  .sh-body{font-size:13.5px;line-height:1.6;color:var(--grey);margin-top:6px}
+  .sh-body b{color:var(--white);font-weight:600}
+
+  :focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="appbar">
+      <div class="logo"><span class="grid"><b></b><b></b><b></b><b></b></span><span class="wm">&#923;equo</span></div>
+      <button class="av" id="avBtn" aria-label="You">CM</button>
+    </div>
+
+    <div class="scroll">
+      <!-- TODAY -->
+      <section class="view active" id="view-today">
+        <h1>What you take.<br><span class="o">And exactly when.</span></h1>
+        <div class="add">
+          <input id="input" type="text" placeholder="Add what you take" aria-label="Add supplement" autocomplete="off">
+          <button id="addBtn">Add</button>
+        </div>
+        <div class="quick" id="quick"></div>
+        <div id="schedule"></div>
+        <div id="note"></div>
+        <p class="disc">Timing and dose guidance based on published evidence. This app explains what you take and when — it does not diagnose, treat, or prescribe. Dose-adequacy tags reflect research-associated effective ranges, not promises of outcome. Not a substitute for medical advice.</p>
+      </section>
+
+      <!-- STACK / BROWSE -->
+      <section class="view" id="view-stack">
+        <p class="eyebrow">Stack · browse the library</p>
+        <h1 style="font-size:26px;margin-bottom:16px">Add to your stack.</h1>
+        <input class="search" id="search" type="text" placeholder="Search supplements" aria-label="Search supplements" autocomplete="off">
+        <div id="library"></div>
+        <p class="disc">Tap any entry to add or remove it from your stack. Effective ranges are research-associated, not personalised dosing.</p>
+      </section>
+
+      <!-- YOU -->
+      <section class="view" id="view-you">
+        <p class="eyebrow">You</p>
+        <div class="stat"><span class="n" id="stackCount">0</span><span class="l">in your stack</span></div>
+        <div class="panelcard">
+          <h3>Your data stays on this device</h3>
+          <p>Your stack is saved locally in this browser. Nothing is sent to a server. Clearing your browser data, or the button below, will reset it.</p>
+        </div>
+        <div class="panelcard">
+          <h3>Working title</h3>
+          <p>This build still carries the Λequo mark as a placeholder. The name and wordmark are still open.</p>
+        </div>
+        <button class="btn-out danger" id="clearBtn">Clear my stack</button>
+        <p class="disc">Timing and dose guidance based on published evidence. Not a substitute for medical advice. Functional framing only — supplements may support normal physiological function; they do not treat, prevent, or cure disease.</p>
+      </section>
+    </div>
+
+    <nav class="tabbar" role="tablist">
+      <button class="tab active" data-view="today" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
+      <button class="tab" data-view="stack" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Stack</button>
+      <button class="tab" data-view="you" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>You</button>
+    </nav>
+
+    <div id="overlay" aria-hidden="true">
+      <div class="scrim" id="scrim"></div>
+      <div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+    </div>
+  </div>
+
+<script>
+/* ── Knowledge base ─────────────────────────────────────────────
+   Each entry: name, common dose, time window, form, warm colours,
+   research-associated effective range (eff), optional micro-instruction,
+   optional low-dose flag, search aliases, and interaction tags.
+   Extend this object to grow the database — UI is fully data-driven. */
+const KB={
+  /* Morning · with breakfast */
+  vitamind:{name:"Vitamin D3",dose:"2000 IU",win:"morning",form:"softgel",c:"#e7a33a",micro:"with fat",eff:"1000\u20134000 IU",tags:["fatsoluble"],alias:["d3","cholecalciferol","vitamin d"]},
+  vitamink2:{name:"Vitamin K2 (MK-7)",dose:"100mcg",win:"morning",form:"softgel",c:"#cdb25a",micro:"with vitamin D + fat",eff:"90\u2013180mcg",tags:["fatsoluble"],alias:["k2","mk7","menaquinone"]},
+  vitaminc:{name:"Vitamin C",dose:"500mg",win:"morning",form:"tablet",c:"#e8a86a",eff:"\u2265200mg",alias:["ascorbic acid","vit c"]},
+  vitaminb12:{name:"Vitamin B12",dose:"500mcg",win:"morning",form:"tablet",c:"#d96a6a",micro:"earlier is better",eff:"\u2265250mcg",alias:["b12","cobalamin","methylcobalamin"]},
+  bcomplex:{name:"B-Complex",dose:"1 serving",win:"morning",form:"capsule",c:"#e0a85a",c2:"#b07a30",micro:"can be stimulating",eff:"per label",alias:["b vitamins","vitamin b","b complex"]},
+  omega3:{name:"Omega-3 (fish oil)",dose:"1000mg",win:"morning",form:"softgel",c:"#e8b24a",micro:"with food",eff:"\u22651000mg EPA/DHA",low:true,lownote:"1000mg of fish oil is roughly 300mg EPA/DHA. Research effect is seen at \u22651000mg EPA/DHA \u2014 read the EPA/DHA line on the label, not the capsule size.",tags:["fatsoluble"],alias:["fish oil","epa","dha","omega 3","omega-3"]},
+  creatine:{name:"Creatine",dose:"5g",win:"morning",form:"powder",c:"#e6e0d2",micro:"any time, be consistent",eff:"3\u20135g",alias:["creatine monohydrate","mono"]},
+  caffeine:{name:"Caffeine",dose:"100mg",win:"morning",form:"tablet",c:"#ddd6c8",micro:"before 14:00",eff:"40\u2013200mg",alias:["caf"]},
+  ltyrosine:{name:"L-Tyrosine",dose:"500mg",win:"morning",form:"capsule",c:"#e3ddcd",c2:"#c4bba6",micro:"empty stomach",eff:"500\u20132000mg",alias:["tyrosine"]},
+  rhodiola:{name:"Rhodiola Rosea",dose:"300mg",win:"morning",form:"capsule",c:"#cf9f6a",c2:"#8a6336",micro:"empty stomach, AM",eff:"200\u2013400mg (3% rosavins)",alias:["rhodiola rosea"]},
+  coq10:{name:"CoQ10",dose:"100mg",win:"morning",form:"softgel",c:"#e6b24a",micro:"with fat",eff:"100\u2013200mg",tags:["fatsoluble"],alias:["coenzyme q10","ubiquinol","ubiquinone"]},
+  curcumin:{name:"Curcumin",dose:"500mg",win:"morning",form:"capsule",c:"#e29a2a",c2:"#a8691a",micro:"with fat + piperine",eff:"500\u20131000mg (bioavailable form)",tags:["fatsoluble"],alias:["turmeric","curcuma"]},
+  lionsmane:{name:"Lion's Mane",dose:"1g",win:"morning",form:"capsule",c:"#d8c9a8",c2:"#b09a6e",eff:"500\u20131000mg",alias:["lions mane","hericium"]},
+  iron:{name:"Iron",dose:"18mg",win:"morning",form:"tablet",c:"#c98a6a",micro:"empty stomach if tolerated",eff:"per need / blood work",alias:["ferrous","ferritin"]},
+  calcium:{name:"Calcium",dose:"500mg",win:"morning",form:"tablet",c:"#e9e3d4",micro:"with food, split doses",eff:"500\u20131000mg per dose",alias:["calcium","citrate","carbonate"]},
+  probiotic:{name:"Probiotic",dose:"per label",win:"morning",form:"capsule",c:"#dcd2bf",c2:"#bdb091",micro:"as directed",eff:"strain-dependent",alias:["probiotics","lactobacillus"]},
+  collagen:{name:"Collagen",dose:"10g",win:"morning",form:"powder",c:"#e9e2d2",micro:"any time",eff:"2.5\u201315g",alias:["collagen peptides"]},
+
+  /* Evening · wind-down (signature) */
+  ashwagandha:{name:"Ashwagandha KSM-66",dose:"600mg",win:"evening",form:"capsule",c:"#caa46f",c2:"#7a5a32",eff:"300\u2013600mg",micro:"traditionally used to support calm",alias:["ashwagandha","ksm-66","withania"]},
+  theanine:{name:"L-Theanine",dose:"200mg",win:"evening",form:"capsule",c:"#eee7da",c2:"#cfc7b6",eff:"100\u2013200mg",alias:["theanine","l theanine"]},
+  lemonbalm:{name:"Lemon Balm",dose:"300mg",win:"evening",form:"capsule",c:"#bcc49a",c2:"#8a9468",eff:"300\u2013600mg",alias:["melissa","lemonbalm"]},
+
+  /* Pre-bed · as you settle */
+  magnesium:{name:"Magnesium Glycinate",dose:"300mg",win:"prebed",form:"capsule",c:"#efe9dd",c2:"#d3cabb",eff:"\u2265200mg elemental",alias:["magnesium","mag","glycinate"]},
+  zinc:{name:"Zinc Bisglycinate",dose:"15mg",win:"prebed",form:"tablet",c:"#d9d4ca",micro:"with food",eff:"8\u201325mg",alias:["zinc"]},
+  glycine:{name:"Glycine",dose:"3g",win:"prebed",form:"powder",c:"#e6e0d2",eff:"\u22653g",alias:["glycine"]},
+  taurine:{name:"Taurine",dose:"1g",win:"prebed",form:"powder",c:"#e3ddcd",eff:"1\u20132g",alias:["taurine"]},
+  glycinemag:{name:"Apigenin",dose:"50mg",win:"prebed",form:"capsule",c:"#e0d49a",c2:"#bfb070",eff:"50mg",micro:"as you settle",alias:["apigenin","chamomile extract"]},
+  melatonin:{name:"Melatonin",dose:"0.5mg",win:"prebed",form:"tablet",c:"#dcd6c8",micro:"30\u201360 min before bed",eff:"0.5\u20133mg (low often enough)",alias:["melatonin"]}
+};
+
+const WIN=[
+  {id:"morning",time:"07:00",label:"Morning",desc:"With breakfast"},
+  {id:"evening",time:"18:00",label:"Evening",desc:"Wind-down",sig:true},
+  {id:"prebed",time:"22:30",label:"Pre-bed",desc:"As you settle"}
+];
+
+/* Interaction rules. type: "caution" (space apart) or "synergy" (pair up). */
+const RULES=[
+  {pair:["zinc","magnesium"],type:"caution",text:"<b>Zinc and magnesium compete for absorption.</b> Space them ~2 hours apart, or move zinc to the morning."},
+  {pair:["iron","calcium"],type:"caution",text:"<b>Calcium blunts iron absorption.</b> Keep iron and calcium at least 2 hours apart."},
+  {pair:["iron","zinc"],type:"caution",text:"<b>Iron and zinc compete at high doses.</b> Take them in separate windows."},
+  {pair:["iron","vitaminc"],type:"synergy",text:"<b>Vitamin C boosts iron uptake.</b> Taking them together improves absorption of non-heme iron."},
+  {pair:["caffeine","theanine"],type:"synergy",text:"<b>Caffeine + L-theanine pair well.</b> Theanine smooths the edge off caffeine \u2014 a common focus combination."},
+  {pair:["vitamind","vitamink2"],type:"synergy",text:"<b>Vitamin D and K2 work together.</b> Take with fat in the same window for best effect."}
+];
+
+const STORAGE_KEY="stack.v1";
+const DEFAULT_STACK=["magnesium","ashwagandha","zinc","vitamind","omega3","theanine"];
+
+/* Persistence — wrapped so the app still runs if storage is blocked (e.g. preview sandbox). */
+function loadStack(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const a=JSON.parse(raw);if(Array.isArray(a))return a.filter(k=>KB[k]);}}catch(e){}
+  return [...DEFAULT_STACK];
+}
+function saveStack(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(stack));}catch(e){}}
+
+let stack=loadStack();
+let view="today";
+const $=id=>document.getElementById(id);
+
+function addItem(k){if(KB[k]&&!stack.includes(k)){stack.push(k);saveStack();renderAll();}}
+function removeItem(k){stack=stack.filter(x=>x!==k);saveStack();renderAll();}
+function toggleItem(k){stack.includes(k)?removeItem(k):addItem(k);}
+
+function matchKey(v){
+  v=v.trim().toLowerCase();if(!v)return null;
+  let k=Object.keys(KB).find(k=>k===v||KB[k].name.toLowerCase()===v);
+  if(k)return k;
+  k=Object.keys(KB).find(k=>KB[k].name.toLowerCase().includes(v)||(KB[k].alias||[]).some(a=>a.includes(v)));
+  return k||null;
+}
+function tryAdd(){const k=matchKey($("input").value);if(k)addItem(k);$("input").value="";}
+
+function dotFor(d){return `<span class="dot ${d.form}" style="--c:${d.c};${d.c2?`--c2:${d.c2};`:""}"></span>`;}
+function adqTag(d){return d.low?`<span class="adq low">\u25B3 Below effective</span>`:`<span class="adq ok">\u2713 Effective dose</span>`;}
+
+/* ── TODAY ── */
+function renderToday(){
+  const q=$("quick");q.innerHTML="";
+  Object.keys(KB).filter(k=>!stack.includes(k)).slice(0,8).forEach(k=>{
+    const b=document.createElement("button");b.className="chip";b.textContent="+ "+KB[k].name;b.onclick=()=>addItem(k);q.appendChild(b);});
+
+  const s=$("schedule");s.innerHTML="";
+  if(!stack.length){
+    s.innerHTML=`<div class="empty">Your day is empty.<br><b>Add what you take above</b> and it sorts into the right time windows.</div>`;
+  }else{
+    WIN.forEach(w=>{
+      const items=stack.filter(k=>KB[k].win===w.id);if(!items.length)return;
+      const block=document.createElement("div");block.className="block";
+      block.innerHTML=`<div class="bhead"><span class="btime">${w.time}</span><span class="blabel${w.sig?" sig":""}">${w.label}</span><span class="bdesc">${w.desc}</span></div>`;
+      items.forEach(k=>{const d=KB[k];const r=document.createElement("div");r.className="row";r.tabIndex=0;
+        r.innerHTML=`${dotFor(d)}<div class="rmain">
+          <div class="rtop"><span class="nm">${d.name}</span>${d.micro?`<span class="micro">${d.micro}</span>`:""}</div>
+          <div class="rmeta"><span class="dose">${d.dose}</span>${adqTag(d)}</div>
+        </div><button class="x" aria-label="Remove ${d.name}">&times;</button>`;
+        r.onclick=()=>openDetail(k);
+        r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDetail(k);}};
+        r.querySelector(".x").onclick=e=>{e.stopPropagation();removeItem(k);};
+        block.appendChild(r);});
+      s.appendChild(block);
+    });
+  }
+
+  const n=$("note");n.innerHTML="";
+  RULES.forEach(rule=>{
+    if(rule.pair.every(k=>stack.includes(k))){
+      const el=document.createElement("div");el.className="note "+rule.type;
+      el.innerHTML=`<span class="mk">${rule.type==="caution"?"Timing":"Pairs"}</span><p>${rule.text}</p>`;n.appendChild(el);}
+  });
+}
+
+/* ── STACK / BROWSE ── */
+function renderLibrary(){
+  const term=($("search").value||"").trim().toLowerCase();
+  const lib=$("library");lib.innerHTML="";
+  WIN.forEach(w=>{
+    let keys=Object.keys(KB).filter(k=>KB[k].win===w.id);
+    if(term)keys=keys.filter(k=>KB[k].name.toLowerCase().includes(term)||(KB[k].alias||[]).some(a=>a.includes(term)));
+    if(!keys.length)return;
+    const head=document.createElement("div");head.className="libsec";head.textContent=`${w.label} · ${w.time}`;lib.appendChild(head);
+    keys.forEach(k=>{const d=KB[k];const inStack=stack.includes(k);
+      const row=document.createElement("div");row.className="lib"+(inStack?" in":"");
+      row.innerHTML=`${dotFor(d)}<div class="rmain">
+        <div class="rtop"><span class="nm">${d.name}</span></div>
+        <div class="rmeta"><span class="dose">${d.dose}</span><span class="adq ok">${d.eff}</span></div>
+      </div><button class="toggle" aria-label="${inStack?"Remove":"Add"} ${d.name}">${inStack?"\u2212":"+"}</button>`;
+      row.onclick=()=>toggleItem(k);lib.appendChild(row);});
+  });
+  if(!lib.children.length)lib.innerHTML=`<div class="empty">No match for <b>${term}</b>.</div>`;
+}
+
+/* ── YOU ── */
+function renderYou(){$("stackCount").textContent=stack.length;}
+
+function renderAll(){renderToday();if(view==="stack")renderLibrary();renderYou();}
+
+function setView(v){
+  view=v;
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+v));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  document.querySelector(".scroll").scrollTop=0;
+  if(v==="stack")renderLibrary();if(v==="you")renderYou();
+}
+
+/* ── Detail sheet ── */
+let lastFocus=null;
+function openSheet(html){lastFocus=document.activeElement;$("sheet").innerHTML='<div class="handle"></div>'+html;$("overlay").classList.add("open");$("overlay").setAttribute("aria-hidden","false");$("sheet").scrollTop=0;$("sheet").focus();}
+function closeSheet(){$("overlay").classList.remove("open");$("overlay").setAttribute("aria-hidden","true");if(lastFocus&&lastFocus.focus)lastFocus.focus();}
+function openDetail(k){
+  const d=KB[k];
+  const verdict=d.low?`<div class="verdict low"><span class="vg">\u25B3</span>Below effective range</div>`:`<div class="verdict ok"><span class="vg">\u2713</span>Effective dose</div>`;
+  const explain=d.low?`<div class="sh-label">Why</div><p class="sh-body">${d.lownote}</p>`:"";
+  const w=WIN.find(x=>x.id===d.win);const micro=d.micro?` · ${d.micro}`:"";
+  openSheet(`
+    <div class="sh-head">${dotFor(d)}<div><div class="sh-name">${d.name}</div><div class="sh-dose">Your dose: ${d.dose}</div></div></div>
+    ${verdict}
+    <div class="sh-label">Effective range</div><p class="sh-body">${d.eff}</p>
+    ${explain}
+    <div class="sh-label">When</div><p class="sh-body">${w.time} · ${w.label}${micro}</p>
+    <button class="btn-out danger" id="rm" style="width:100%;margin-top:24px">Remove from stack</button>
+  `);
+  $("rm").onclick=()=>{removeItem(k);closeSheet();};
+}
+
+/* Wiring */
+$("scrim").onclick=closeSheet;
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("overlay").classList.contains("open"))closeSheet();});
+$("addBtn").onclick=tryAdd;
+$("input").addEventListener("keydown",e=>{if(e.key==="Enter")tryAdd();});
+$("search").addEventListener("input",renderLibrary);
+$("avBtn").onclick=()=>setView("you");
+$("clearBtn").onclick=()=>{stack=[];saveStack();renderAll();setView("today");};
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+
+renderAll();
+</script>
+</body>
+</html>
