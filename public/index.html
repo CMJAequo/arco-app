@@ -1237,9 +1237,14 @@ window.submitCheckin = function(){
     checkins.push(entry);
     try{localStorage.setItem('arco-checkins',JSON.stringify(checkins));}catch(e){}
   }
+  saveCheckinRemote(currentQuestion.key, currentQAnswer);
   // Update profile stress/sleep for arc calculations
   if(currentQuestion.key==='sleep') profile.sleepQuality = parseInt(currentQAnswer)||3;
   if(currentQuestion.key==='stress') profile.stress = parseInt(currentQAnswer)||3;
+  if(currentQuestion.key==='sleep'||currentQuestion.key==='stress'){
+    try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
+    saveProfileRemote();
+  }
   closeCheckin();
   buildDash();
 };
@@ -1704,25 +1709,9 @@ function getInsight(score,p,phase){
   return'Your arc is in a strong position. Protect your current habits — this is where compounding starts.';
 }
 
-window.openCheckin=function(){document.getElementById('modal-overlay').classList.add('open');document.getElementById('checkin-modal').classList.add('open');};
-window.closeCheckin=function(){document.getElementById('modal-overlay').classList.remove('open');document.getElementById('checkin-modal').classList.remove('open');};
-window.submitCheckin=function(){
-  const mood=document.querySelector('#ci-mood .sel-orange')?.dataset.val||'okay';
-  const sleep=parseInt(document.getElementById('ci-sleep').value)||3;
-  const train=document.querySelector('#ci-train .sel-orange')?.dataset.val||'no';
-  const stress=parseInt(document.getElementById('ci-stress').value)||2;
-  const mMap={great:.12,good:.07,okay:0,tired:-.10,drained:-.18};
-  const m=mMap[mood]||0,sq=(sleep-3)*0.06,st=(stress-3)*-0.05;
-  todayMod={cortisol:Math.max(-.3,Math.min(.3,m+sq+st)),melatonin:Math.max(-.2,Math.min(.2,-m*0.3)),testosterone:Math.max(-.2,Math.min(.3,m*0.5+sq*0.8+(train==='yes'?.08:0))),trained:train==='yes'};
-  profile.sleepQuality=sleep;profile.stress=stress;
-  localStorage.setItem('arco-profile',JSON.stringify(profile));
-  saveProfileRemote();
-  const today=new Date().toDateString();
-  const entry={date:today,mood,sleep,train,stress};
-  if(!checkins.find(c=>c.date===today)){checkins.push(entry);localStorage.setItem('arco-checkins',JSON.stringify(checkins));}
-  saveCheckinRemote(entry);
-  closeCheckin();buildDash();
-};
+// NOTE: the authoritative check-in flow is the rotating-question openCheckin/submitCheckin
+// defined earlier (matches daily_logs question_key/answer). The old broken duplicate that
+// read non-existent #ci-mood/#ci-sleep fields lived here and has been removed.
 
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 
@@ -1771,19 +1760,34 @@ window.arcoSignOut = function(){
 async function saveProfileRemote(){
   if(!currentUser) return;
   try{
-    await _supabase.from('users').upsert({id:currentUser.id, email:currentUser.email, profile:profile, updated_at:new Date().toISOString()});
+    // Columns match the live schema: users(id, email, name, profile jsonb, supplements)
+    await _supabase.from('users').upsert({
+      id: currentUser.id,
+      email: currentUser.email,
+      name: profile.name,
+      profile: profile,
+      supplements: profile.supplements || []
+    });
   }catch(e){console.warn('[arco] profile sync failed', e);}
 }
 async function saveTakenRemote(key, taken){
   if(!currentUser) return;
+  const d = isoDate();
   try{
-    await _supabase.from('supplement_taken').upsert({user_id:currentUser.id, supplement_id:key, date:isoDate(), taken:taken, updated_at:new Date().toISOString()}, {onConflict:'user_id,supplement_id,date'});
+    // supplement_taken(user_id, supplement_key, date, taken_at, count) — a row means taken.
+    await _supabase.from('supplement_taken').delete().eq('user_id',currentUser.id).eq('supplement_key',key).eq('date',d);
+    if(taken){
+      await _supabase.from('supplement_taken').insert({user_id:currentUser.id, supplement_key:key, date:d, taken_at:new Date().toISOString(), count:1});
+    }
   }catch(e){console.warn('[arco] taken sync failed', e);}
 }
-async function saveCheckinRemote(entry){
+async function saveCheckinRemote(questionKey, answer){
   if(!currentUser) return;
+  const d = isoDate();
   try{
-    await _supabase.from('daily_logs').upsert({user_id:currentUser.id, date:isoDate(), data:entry, updated_at:new Date().toISOString()}, {onConflict:'user_id,date'});
+    // daily_logs(user_id, date, question_key, answer) — one row per day; replace on re-check-in.
+    await _supabase.from('daily_logs').delete().eq('user_id',currentUser.id).eq('date',d);
+    await _supabase.from('daily_logs').insert({user_id:currentUser.id, date:d, question_key:questionKey, answer:String(answer)});
   }catch(e){console.warn('[arco] checkin sync failed', e);}
 }
 
@@ -1800,17 +1804,19 @@ async function loadProfileRemote(){
 async function hydrateFromRemote(){
   if(!currentUser) return;
   try{
-    const {data:takenRows} = await _supabase.from('supplement_taken').select('supplement_id,taken').eq('user_id',currentUser.id).eq('date',isoDate());
+    // A supplement_taken row for today = that supplement was taken.
+    const {data:takenRows} = await _supabase.from('supplement_taken').select('supplement_key').eq('user_id',currentUser.id).eq('date',isoDate());
     if(takenRows){
       takenToday.length=0;
-      takenRows.filter(r=>r.taken).forEach(r=>takenToday.push(r.supplement_id));
+      takenRows.forEach(r=>takenToday.push(r.supplement_key));
       try{localStorage.setItem('arco-taken-'+new Date().toDateString(),JSON.stringify(takenToday));}catch(e){}
     }
   }catch(e){console.warn('[arco] taken load failed', e);}
   try{
-    const {data:logRows} = await _supabase.from('daily_logs').select('data').eq('user_id',currentUser.id).order('date',{ascending:true});
+    const {data:logRows} = await _supabase.from('daily_logs').select('date,question_key,answer').eq('user_id',currentUser.id).order('date',{ascending:true});
     if(logRows){
-      checkins = logRows.map(r=>r.data).filter(Boolean);
+      // Rebuild local checkins ({date,key,value}); parse date as local to match toDateString() usage.
+      checkins = logRows.map(r=>{const p=(r.date||'').split('-').map(Number); return {date:new Date(p[0],p[1]-1,p[2]).toDateString(), key:r.question_key, value:r.answer};});
       try{localStorage.setItem('arco-checkins',JSON.stringify(checkins));}catch(e){}
     }
   }catch(e){console.warn('[arco] logs load failed', e);}
