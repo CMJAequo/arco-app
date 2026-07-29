@@ -26,8 +26,8 @@
   --font:'Switzer',sans-serif;
 }
 body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:24px 0;}
-.phone{width:390px;min-height:844px;background:var(--bg);border-radius:44px;overflow:hidden;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.35);}
-.screen{display:none;flex-direction:column;min-height:844px;}
+.phone{width:390px;min-height:844px;background:var(--bg);border-radius:44px;overflow:visible;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.35);}
+.screen{display:none;flex-direction:column;min-height:844px;overflow:visible;}
 .screen.active{display:flex;}
 
 /* STANDALONE PWA — edge to edge when launched from home screen */
@@ -35,11 +35,6 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   body{background:#EDE9E1;padding:0;}
   .phone{width:100%;border-radius:0;box-shadow:none;padding-top:env(safe-area-inset-top);}
 }
-
-/* STATUS BAR */
-.sb{padding:14px 20px 0;display:flex;justify-content:space-between;align-items:center;background:var(--bg);}
-.sb-time{font-size:12px;font-weight:500;color:var(--ink);}
-.sb-icons{display:flex;gap:5px;align-items:center;}
 
 /* ONBOARDING */
 .ob-header{background:var(--ink);padding:10px 24px 28px;}
@@ -90,7 +85,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .topbar-today-arrow{font-size:10px;color:var(--muted);}
 
 /* DASH BODY */
-.dash-body{flex:1;padding:0 16px;overflow-y:auto;}
+.dash-body{flex:1;padding:0 16px;overflow-y:auto;padding-bottom:90px;}
 
 /* ARC SCORE CARD */
 .arc-card{background:var(--card);border-radius:var(--radius);padding:20px 20px 16px;margin-bottom:12px;}
@@ -174,6 +169,11 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 
 /* BOTTOM NAV */
 .bottom-nav{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  z-index:100;
   background:var(--bg);
   padding:8px 16px calc(20px + env(safe-area-inset-bottom));
   display:flex;
@@ -213,13 +213,6 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 
 <!-- ONBOARDING -->
 <div class="screen active" id="screen-onboard">
-  <div class="sb" style="background:var(--ink);">
-    <span class="sb-time" style="color:#EDE9E1;opacity:0.55;" id="sb-ob">9:41</span>
-    <div class="sb-icons">
-      <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="4" width="3" height="7" rx="1" fill="#EDE9E1" opacity="0.5"/><rect x="4.5" y="2.5" width="3" height="8.5" rx="1" fill="#EDE9E1" opacity="0.7"/><rect x="9" y="0.5" width="3" height="10.5" rx="1" fill="#EDE9E1" opacity="0.9"/><rect x="13.5" y="0.5" width="3" height="10.5" rx="1" fill="#EDE9E1"/></svg>
-      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="#EDE9E1" stroke-opacity="0.35"/><rect x="2" y="2" width="16" height="9" rx="2" fill="#EDE9E1"/><path d="M24 4.5V8.5C24.8 8.2 25.5 7.2 25.5 6.5C25.5 5.8 24.8 4.8 24 4.5Z" fill="#EDE9E1" opacity="0.4"/></svg>
-    </div>
-  </div>
   <div class="ob-header">
     <div class="ob-logo">arco</div>
     <div class="ob-sub">recovery system</div>
@@ -229,9 +222,6 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 
 <!-- LOADING -->
 <div class="screen" id="screen-loading">
-  <div class="sb" style="background:var(--ink);">
-    <span class="sb-time" style="color:#EDE9E1;opacity:0.55;" id="sb-load">9:41</span>
-  </div>
   <div class="loading-wrap">
     <div class="loading-logo">arco</div>
     <div class="loading-tag">building your arc</div>
@@ -242,13 +232,6 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 
 <!-- DASHBOARD -->
 <div class="screen" id="screen-dash">
-  <div class="sb" id="dash-sb">
-    <span class="sb-time" id="sb-dash">9:41</span>
-    <div class="sb-icons">
-      <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="4" width="3" height="7" rx="1" fill="#1A1612" opacity="0.4"/><rect x="4.5" y="2.5" width="3" height="8.5" rx="1" fill="#1A1612" opacity="0.6"/><rect x="9" y="0.5" width="3" height="10.5" rx="1" fill="#1A1612" opacity="0.85"/><rect x="13.5" y="0.5" width="3" height="10.5" rx="1" fill="#1A1612"/></svg>
-      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="#1A1612" stroke-opacity="0.3"/><rect x="2" y="2" width="14" height="9" rx="2" fill="#1A1612" opacity="0.7"/></svg>
-    </div>
-  </div>
   <div class="topbar">
     <div class="topbar-streak">
       <span class="topbar-today-arrow" style="transform:rotate(180deg);display:inline-block;">›</span>
