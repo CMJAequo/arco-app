@@ -617,114 +617,163 @@ function runDiagnosis(p){
   const highStress = p.stress>=4;
   const age = parseInt(p.age)||25;
 
-  const results = [];
-
-  // ── VITAMIN D ──
-  // NOTE: this seasonal rule is calibrated for latBand 'high' (>50°N — UK / Northern
-  // Europe) ONLY. profile.latBand is captured at profile creation but not used here yet.
-  const vitdReasons = [];
-  let vitdScore = 0;
-  // Year-round sunlight / lifestyle exposure.
-  if(p.sunlight==='rarely'&&['banking','corporate','startup','founder'].includes(p.workType)){
-    vitdScore+=3;vitdReasons.push('Indoor work 08:00–21:00 + rarely outdoors — effectively zero synthesis year-round');
-  } else if(p.sunlight==='rarely'){vitdScore+=2;vitdReasons.push('Minimal outdoor sun exposure');}
-  else if(p.sunlight==='sometimes'){vitdScore+=1;vitdReasons.push('Limited sun exposure');}
-  if(trainsFrequently){vitdScore+=1;vitdReasons.push('Training sweat losses increase turnover');}
-  // Winter is a FLOOR, not an addition: at high latitude, Oct–March synthesis is negligible
-  // regardless of reported sunlight — guarantee the surface score without stacking on top.
-  if(isWinter){vitdScore=Math.max(vitdScore,3);vitdReasons.unshift('Zero cutaneous synthesis at this latitude October–March');}
-  if(vitdScore>=3) results.push({id:'vitd',confidence:'HIGH',score:vitdScore,reasons:vitdReasons,
-    note:'Most people in Northern Europe are deficient October–March. This is the single highest-yield intervention for your profile.',
-    contraindicated: false});
-
-  // ── MAGNESIUM ──
-  const mgReasons = [];
-  let mgScore = 0;
-  if(trainsFrequently){mgScore+=3;mgReasons.push('Sweat losses ~2.5–3 mg per session');}
-  if(highAlcohol){mgScore+=2;mgReasons.push('Alcohol causes renal magnesium wasting');}
-  if(onPPI){mgScore+=2;mgReasons.push('PPIs impair magnesium absorption — FDA hypomagnesemia warning');}
-  if(highStress){mgScore+=1;mgReasons.push('Cortisol promotes renal magnesium wasting');}
-  if(mgScore>=2) results.push({id:'magnesium',confidence:mgScore>=4?'HIGH':'MODERATE',score:mgScore,reasons:mgReasons,
-    note:'Glycinate form specifically — oxide (most commonly sold) absorbs at ~4% vs glycinate at ~80%.',
-    contraindicated: false});
-
-  // ── OMEGA-3 ──
-  const o3Reasons = [];
-  let o3Score = 0;
-  if(noFish){o3Score+=3;o3Reasons.push('No oily fish intake — primary dietary source is absent');}
-  else if(lowFish){o3Score+=2;o3Reasons.push('Less than 2 portions of oily fish per week');}
-  if(isVegetarian){o3Score+=2;o3Reasons.push('ALA to EPA conversion is less than 10% — plant sources insufficient');}
-  if(o3Score>=2) results.push({id:'omega3',confidence:o3Score>=4?'HIGH':'MODERATE',score:o3Score,reasons:o3Reasons,
-    note:'Check EPA content specifically — most capsules contain only ~300 mg EPA+DHA per 1,000 mg capsule.',
-    contraindicated: false});
-
-  // ── CREATINE ── (not a deficiency but high-evidence performance add)
-  const crReasons = [];
-  let crScore = 0;
-  if(trainsFrequently){crScore+=3;crReasons.push('Resistance training amplifies creatine benefit significantly');}
-  if(isVegetarian){crScore+=2;crReasons.push('Vegans and vegetarians have ~20–30% lower baseline muscle creatine');}
-  if(crScore>=2) results.push({id:'creatine',confidence:'HIGH',score:crScore,reasons:crReasons,
-    note:'Not a deficiency — the highest-evidence performance supplement that exists. 3–5 g/day monohydrate.',
-    contraindicated: false});
-
-  // ── ZINC ──
-  const znReasons = [];
-  let znScore = 0;
-  if(isVegetarian){znScore+=3;znReasons.push('Phytate in grains and legumes chelates zinc. Requirements ~50% higher');}
-  if(trainsFrequently){znScore+=2;znReasons.push('Sweat and urinary losses during training');}
-  if(highAlcohol){znScore+=1;znReasons.push('Alcohol impairs zinc absorption');}
-  if(znScore>=2) results.push({id:'zinc',confidence:znScore>=4?'HIGH':'MODERATE',score:znScore,reasons:znReasons,
-    note:'Bisglycinate or picolinate form only — oxide is 43% less bioavailable. Pair with 1–2 mg copper.',
-    contraindicated: false});
-
-  // ── B12 ──
-  const b12Reasons = [];
-  let b12Score = 0;
-  if(isVegan){b12Score+=5;b12Reasons.push('Vegan diet — B12 is absent from plant foods. Supplementation is mandatory');}
-  else if(isVegetarian){b12Score+=3;b12Reasons.push('Vegetarian diet — limited dietary B12 sources');}
-  if(onMetformin){b12Score+=3;b12Reasons.push('Metformin use — OR 4.72 for deficiency vs non-users (PLoS One 2018)');}
-  if(onPPI){b12Score+=2;b12Reasons.push('PPIs reduce acid needed to release food-bound B12');}
-  if(age>=50){b12Score+=2;b12Reasons.push('Absorption declines with age due to reduced intrinsic factor');}
-  if(b12Score>=2) results.push({id:'b12',confidence:b12Score>=4?'HIGH':'MODERATE',score:b12Score,reasons:b12Reasons,
-    note:'1,000 µg/day oral. Methyl vs cyano form makes minimal difference for most people despite marketing claims.',
-    contraindicated: false});
-
-  // ── ASHWAGANDHA ──
-  const ashReasons = [];
-  let ashScore = 0;
-  if(highStress){ashScore+=3;ashReasons.push('Elevated stress — KSM-66 reduced cortisol ~27.9% in RCT (Chandrasekhar 2012)');}
-  if(trainsFrequently&&highStress){ashScore+=1;ashReasons.push('Combined training stress + psychological stress increases HPA axis load');}
-  if(ashScore>=3) results.push({id:'ashwagandha',confidence:'MODERATE',score:ashScore,reasons:ashReasons,
-    note:'KSM-66 extract specifically at 600 mg/day. Effect accumulates over 4–8 weeks. Legal claim status in UK is unclear — avoid disease claims.',
-    contraindicated: false});
-
-  // ── COQ10 ──
-  if(onStatins){
-    results.push({id:'coq10',confidence:'MODERATE',score:3,
-      reasons:['Statins inhibit HMG-CoA reductase — the shared pathway for both cholesterol and CoQ10 synthesis'],
+  // ── SCORING (declarative) ──
+  // Each supplement's rules live here as data, so `max` (its theoretical ceiling) is derived
+  // from the same weights as the live score and can't drift when a rule changes. A factor is
+  // {when, weight, reason} (independent) or {oneOf:[...]} (first match wins; contributes its
+  // largest branch to max). `floor` clamps the score up to a minimum without stacking (vitd
+  // winter). `cutoff` is the per-supplement surface threshold.
+  const ctx = {
+    isWinter, isVegan, isVegetarian, noFish, lowFish, highAlcohol, trainsFrequently,
+    onMetformin, onPPI, onStatins, onWarfarin, highStress, age,
+    sunlight: p.sunlight,
+    indoorWork: ['banking','corporate','startup','founder'].includes(p.workType)
+  };
+  const SCORING = [
+    { id:'vitd', cutoff:3,
+      // Seasonal rule calibrated for latBand 'high' (>50°N) only; latBand is captured but unused here.
+      note:'Most people in Northern Europe are deficient October–March. This is the single highest-yield intervention for your profile.',
+      factors:[
+        {oneOf:[
+          {when:c=>c.sunlight==='rarely'&&c.indoorWork, weight:3, reason:'Indoor work 08:00–21:00 + rarely outdoors — effectively zero synthesis year-round'},
+          {when:c=>c.sunlight==='rarely', weight:2, reason:'Minimal outdoor sun exposure'},
+          {when:c=>c.sunlight==='sometimes', weight:1, reason:'Limited sun exposure'},
+        ]},
+        {when:c=>c.trainsFrequently, weight:1, reason:'Training sweat losses increase turnover'},
+      ],
+      floor:{when:c=>c.isWinter, value:3, reason:'Zero cutaneous synthesis at this latitude October–March'},
+    },
+    { id:'magnesium', cutoff:2,
+      note:'Glycinate form specifically — oxide (most commonly sold) absorbs at ~4% vs glycinate at ~80%.',
+      factors:[
+        {when:c=>c.trainsFrequently, weight:3, reason:'Sweat losses ~2.5–3 mg per session'},
+        {when:c=>c.highAlcohol, weight:2, reason:'Alcohol causes renal magnesium wasting'},
+        {when:c=>c.onPPI, weight:2, reason:'PPIs impair magnesium absorption — FDA hypomagnesemia warning'},
+        {when:c=>c.highStress, weight:1, reason:'Cortisol promotes renal magnesium wasting'},
+      ],
+    },
+    { id:'omega3', cutoff:2,
+      note:'Check EPA content specifically — most capsules contain only ~300 mg EPA+DHA per 1,000 mg capsule.',
+      factors:[
+        {oneOf:[
+          {when:c=>c.noFish, weight:3, reason:'No oily fish intake — primary dietary source is absent'},
+          {when:c=>c.lowFish, weight:2, reason:'Less than 2 portions of oily fish per week'},
+        ]},
+        {when:c=>c.isVegetarian, weight:2, reason:'ALA to EPA conversion is less than 10% — plant sources insufficient'},
+      ],
+    },
+    { id:'creatine', cutoff:2,
+      note:'Not a deficiency — the highest-evidence performance supplement that exists. 3–5 g/day monohydrate.',
+      factors:[
+        {when:c=>c.trainsFrequently, weight:3, reason:'Resistance training amplifies creatine benefit significantly'},
+        {when:c=>c.isVegetarian, weight:2, reason:'Vegans and vegetarians have ~20–30% lower baseline muscle creatine'},
+      ],
+    },
+    { id:'zinc', cutoff:2,
+      note:'Bisglycinate or picolinate form only — oxide is 43% less bioavailable. Pair with 1–2 mg copper.',
+      factors:[
+        {when:c=>c.isVegetarian, weight:3, reason:'Phytate in grains and legumes chelates zinc. Requirements ~50% higher'},
+        {when:c=>c.trainsFrequently, weight:2, reason:'Sweat and urinary losses during training'},
+        {when:c=>c.highAlcohol, weight:1, reason:'Alcohol impairs zinc absorption'},
+      ],
+    },
+    { id:'b12', cutoff:2,
+      note:'1,000 µg/day oral. Methyl vs cyano form makes minimal difference for most people despite marketing claims.',
+      factors:[
+        {oneOf:[
+          {when:c=>c.isVegan, weight:5, reason:'Vegan diet — B12 is absent from plant foods. Supplementation is mandatory'},
+          {when:c=>c.isVegetarian, weight:3, reason:'Vegetarian diet — limited dietary B12 sources'},
+        ]},
+        {when:c=>c.onMetformin, weight:3, reason:'Metformin use — OR 4.72 for deficiency vs non-users (PLoS One 2018)'},
+        {when:c=>c.onPPI, weight:2, reason:'PPIs reduce acid needed to release food-bound B12'},
+        {when:c=>c.age>=50, weight:2, reason:'Absorption declines with age due to reduced intrinsic factor'},
+      ],
+    },
+    { id:'ashwagandha', cutoff:3,
+      note:'KSM-66 extract specifically at 600 mg/day. Effect accumulates over 4–8 weeks. Legal claim status in UK is unclear — avoid disease claims.',
+      factors:[
+        {when:c=>c.highStress, weight:3, reason:'Elevated stress — KSM-66 reduced cortisol ~27.9% in RCT (Chandrasekhar 2012)'},
+        {when:c=>c.trainsFrequently&&c.highStress, weight:1, reason:'Combined training stress + psychological stress increases HPA axis load'},
+      ],
+    },
+    { id:'coq10', cutoff:3,
       note:'Ubiquinol form. 100–200 mg/day with a fat-containing meal. Note: NICE does not currently recommend this for statin myopathy but depletion is real.',
-      contraindicated: false});
+      factors:[
+        {when:c=>c.onStatins, weight:3, reason:'Statins inhibit HMG-CoA reductase — the shared pathway for both cholesterol and CoQ10 synthesis'},
+      ],
+    },
+  ];
+
+  // Evaluate a spec → {score, max, reasons}. max sums each factor's ceiling (oneOf = its
+  // largest branch), then floor raises the minimum for both score and max.
+  function evalSpec(spec){
+    let score = 0, max = 0;
+    const reasons = [];
+    for(const f of spec.factors){
+      if(f.oneOf){
+        max += Math.max(...f.oneOf.map(o=>o.weight));
+        for(const o of f.oneOf){ if(o.when(ctx)){ score += o.weight; reasons.push(o.reason); break; } }
+      } else {
+        max += f.weight;
+        if(f.when(ctx)){ score += f.weight; reasons.push(f.reason); }
+      }
+    }
+    if(spec.floor){
+      max = Math.max(max, spec.floor.value);
+      if(spec.floor.when(ctx)){ score = Math.max(score, spec.floor.value); reasons.unshift(spec.floor.reason); }
+    }
+    return {score, max, reasons};
   }
 
-  // ── K2 ── contraindicated on warfarin
-  if(!onWarfarin && vitdScore>=3){
-    results.push({id:'k2',confidence:'MODERATE',score:2,
+  // Evaluate every supplement; keep the full result in evalMap (even if it doesn't surface,
+  // for the stack cross-ref below), and push the ones that clear their cutoff.
+  const results = [];
+  const evalMap = {};
+  for(const spec of SCORING){
+    const {score, max, reasons} = evalSpec(spec);
+    evalMap[spec.id] = {score, max, cutoff:spec.cutoff, reasons};
+    if(score >= spec.cutoff){
+      results.push({id:spec.id, score, max, cutoff:spec.cutoff, reasons, note:spec.note, contraindicated:false});
+    }
+  }
+
+  // ── K2 ── companion to D3 / contraindicated on warfarin. Fixed value (max === cutoff),
+  // and depends on vitd's computed score, so it sits outside the declarative loop.
+  if(!onWarfarin && evalMap.vitd.score >= 3){
+    results.push({id:'k2', score:2, max:2, cutoff:2,
       reasons:['Vitamin D increases calcium absorption — K2 MK-7 directs it to bone, not arteries'],
       note:'MK-7 form, 90–180 µg/day. Synergistic with Vitamin D. ABSOLUTE contraindication if on warfarin.',
       contraindicated: false});
   }
   if(onWarfarin){
-    results.push({id:'k2',confidence:'CONTRAINDICATED',score:0,
+    results.push({id:'k2', score:0, max:2, cutoff:2,
       reasons:['Warfarin detected — K2 directly antagonises vitamin K antagonist anticoagulants'],
       note:'Do not take K2 with warfarin without physician supervision.',
       contraindicated: true});
   }
 
-  // Sort by score descending, contraindicated last
+  // ── Normalize each surfaced result to its own [cutoff … max] range so score and confidence
+  // are comparable across supplements with very different ceilings (b12 tops out at 12, k2 at 2).
+  // `normalized` is ONLY meaningful when a supplement has a gradable range (max > cutoff).
+  // Binary / all-or-nothing rules (max === cutoff, e.g. k2, coq10) have no range to scale across,
+  // so they are excluded from the normalized confidence gate and get a fixed MODERATE — a
+  // supplement isn't high-confidence just for being binary. ──
+  results.forEach(r=>{
+    if(r.contraindicated){ r.normalized = null; r.confidence = 'CONTRAINDICATED'; return; }
+    if(r.max === r.cutoff){ r.normalized = null; r.confidence = 'MODERATE'; return; }
+    r.normalized = Math.min(1, Math.max(0, (r.score - r.cutoff) / (r.max - r.cutoff)));
+    r.confidence = r.normalized >= 0.66 ? 'HIGH' : r.normalized >= 0.33 ? 'MODERATE' : 'LOW';
+  });
+
+  // Sort by normalized (contraindicated last; raw score as tiebreak). Binary supplements have
+  // null normalized (not gradable) — rank them at the BOTTOM of the MODERATE tier (the 0.33 gate),
+  // so a companion like k2 sits below the gradable MODERATEs but above the LOWs.
+  const normKey = r => r.normalized == null ? 0.33 : r.normalized;
   results.sort((a,b)=>{
     if(a.contraindicated&&!b.contraindicated) return 1;
     if(!a.contraindicated&&b.contraindicated) return -1;
-    return b.score-a.score;
+    if(normKey(b) !== normKey(a)) return normKey(b) - normKey(a);
+    return b.score - a.score;
   });
 
   // ── Cross-reference the user's current stack (profile.currentStack) ──
@@ -734,19 +783,10 @@ function runDiagnosis(p){
   // 1. Mark results the user already takes.
   results.forEach(r=>{ if(stack.includes(r.id)) r.alreadyTaking = true; });
 
-  // Computed score + contributing reasons per supplement, so un-surfaced stack items
-  // can be bucketed. Surface cutoff is 2 for most, 3 for vitd/ashwagandha — so a
-  // non-surfaced score of 2 is a "just below the cutoff" (marginal) case, only reachable
-  // by vitd/ashwagandha; everything else that didn't surface is 0–1.
-  const stackScore = {
-    vitd: vitdScore, magnesium: mgScore, omega3: o3Score, creatine: crScore,
-    zinc: znScore, b12: b12Score, ashwagandha: ashScore, coq10: onStatins ? 3 : 0
-  };
-  const stackReasons = {
-    vitd: vitdReasons, magnesium: mgReasons, omega3: o3Reasons, creatine: crReasons,
-    zinc: znReasons, b12: b12Reasons, ashwagandha: ashReasons
-  };
-  // 2. Split un-surfaced stack items:
+  // 2. Split un-surfaced stack items using each supplement's computed score (from evalMap).
+  //    Surface cutoff is 2 for most, 3 for vitd/ashwagandha — so a non-surfaced score of 2
+  //    is a "just below the cutoff" (marginal) case, only reachable by the cutoff-3 supps;
+  //    everything else that didn't surface is 0–1.
   //    score >= 2  → borderline (marginal — at/just below a cutoff)
   //    score 0–1   → flagged (genuinely no basis in this profile)
   const flagged = [];
@@ -754,8 +794,9 @@ function runDiagnosis(p){
   stack.filter(id=>!surfacedIds.has(id)).forEach(id=>{
     const s = SUPPLEMENT_DB.supplements[id];
     const name = s ? s.name : id;
-    const score = stackScore[id] || 0;
-    const rs = stackReasons[id] || [];
+    const ev = evalMap[id];
+    const score = ev ? ev.score : 0;
+    const rs = ev ? ev.reasons : [];
     if(score >= 2){
       borderline.push({id, name, score,
         reason: 'Marginal — scored '+score+', just below the surface threshold for your profile'
@@ -781,7 +822,7 @@ function showDiagnosis(){
   localStorage.setItem('arco-profile', JSON.stringify(profile));
   saveProfileRemote();
 
-  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.5)', CONTRAINDICATED:'#cc3333'};
+  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.5)', LOW:'rgba(26,22,18,0.3)', CONTRAINDICATED:'#cc3333'};
   const evidenceBadge = id => {
     const s = SUPPLEMENTS[id];
     if(!s) return '';
@@ -1616,7 +1657,7 @@ function showProtocolTab(){
   const diagnosis = runDiagnosis(profile);
   const sups = profile.supplements || [];
 
-  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.45)', CONTRAINDICATED:'#cc3333'};
+  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.45)', LOW:'rgba(26,22,18,0.28)', CONTRAINDICATED:'#cc3333'};
   const evidenceBadge = id => {
     const s = SUPPLEMENTS[id]; if(!s) return '';
     const c = s.evidence==='STRONG'?'#4BB87B':s.evidence==='MODERATE'?'rgba(26,22,18,0.35)':'rgba(26,22,18,0.2)';
