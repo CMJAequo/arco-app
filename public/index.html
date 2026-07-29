@@ -519,6 +519,16 @@ const steps=[
      profile.goal='performance';
      profile.sunlight='sometimes';
    }
+  },
+  {title:'what do you take now?',sub:'so arco can fix timing and form, not just tell you what to start.',
+   render:()=>`
+    <div class="chip-group" id="g-stack">
+      ${Object.values(SUPPLEMENT_DB.supplements).map(s=>`<div class="chip" data-val="${s.id}" onclick="toggleChipSup(this);document.getElementById('chip-stack-none').classList.remove('sel-ink')">${s.name}</div>`).join('')}
+    </div>
+    <div class="chip-group" style="margin-top:4px;">
+      <div class="chip" id="chip-stack-none" data-val="none" onclick="document.querySelectorAll('#g-stack .sel-ink').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink')">nothing yet</div>
+    </div>`,
+   save:()=>{profile.currentStack=[...document.querySelectorAll('#g-stack .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');}
   }
 ];
 
