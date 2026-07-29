@@ -78,10 +78,15 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .login-wrap{flex:1;background:var(--ink);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 32px;}
 .login-logo{color:#EDE9E1;font-size:44px;font-weight:300;letter-spacing:-0.03em;line-height:1;}
 .login-tag{color:#EDE9E1;font-size:11px;opacity:0.35;letter-spacing:0.08em;margin-top:8px;margin-bottom:52px;}
-.login-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:300px;padding:15px 20px;border:none;border-radius:14px;background:var(--orange);color:#fff;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;transition:opacity 0.15s;}
+.login-input{width:100%;padding:15px 18px;border:1px solid rgba(237,233,225,0.15);border-radius:14px;background:rgba(237,233,225,0.06);color:#EDE9E1;font-size:15px;font-family:var(--font);outline:none;text-align:center;margin-bottom:12px;transition:border-color 0.15s;-webkit-appearance:none;}
+.login-input::placeholder{color:rgba(237,233,225,0.3);}
+.login-input:focus{border-color:var(--orange);}
+.login-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px 20px;border:none;border-radius:14px;background:var(--orange);color:#fff;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;transition:opacity 0.15s;}
 .login-btn:hover{opacity:0.9;}
-.login-g{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#fff;color:var(--orange);font-weight:700;font-size:13px;}
-.login-note{color:#EDE9E1;opacity:0.3;font-size:11px;letter-spacing:0.06em;margin-top:20px;}
+.login-note{color:#EDE9E1;opacity:0.3;font-size:11px;letter-spacing:0.06em;margin-top:20px;text-align:center;}
+.login-sent-title{color:#EDE9E1;font-size:20px;font-weight:400;letter-spacing:-0.01em;margin-bottom:10px;}
+.login-sent-sub{color:#EDE9E1;opacity:0.45;font-size:13px;line-height:1.6;margin-bottom:24px;}
+.login-link{background:none;border:none;color:#EDE9E1;opacity:0.4;font-size:12px;font-family:var(--font);letter-spacing:0.04em;cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
 
 /* DASHBOARD TOP BAR */
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px 14px;background:var(--bg);}
@@ -226,11 +231,18 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   <div class="login-wrap">
     <div class="login-logo">arco</div>
     <div class="login-tag">recovery system</div>
-    <button class="login-btn" onclick="signInWithGoogle()">
-      <span class="login-g">G</span>
-      Continue with Google
-    </button>
-    <div class="login-note">your data stays yours</div>
+    <!-- EMAIL ENTRY STATE -->
+    <div id="login-form" style="width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;">
+      <input class="login-input" id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')sendMagicLink()">
+      <button class="login-btn" onclick="sendMagicLink()">Continue</button>
+      <div class="login-note" id="login-note">we'll send you a magic link</div>
+    </div>
+    <!-- CHECK YOUR EMAIL STATE -->
+    <div id="login-sent" style="width:100%;max-width:300px;display:none;flex-direction:column;align-items:center;text-align:center;">
+      <div class="login-sent-title">check your email</div>
+      <div class="login-sent-sub">we sent a magic link to<br><span id="login-sent-email" style="color:var(--orange);"></span></div>
+      <button class="login-link" onclick="resetLogin()">use a different email</button>
+    </div>
   </div>
 </div>
 
@@ -1723,8 +1735,32 @@ let currentUser = null;
 // Local calendar date as YYYY-MM-DD for the `date` columns
 function isoDate(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-window.signInWithGoogle = function(){
-  _supabase.auth.signInWithOAuth({provider:'google', options:{redirectTo: window.location.origin}});
+window.sendMagicLink = async function(){
+  const input = document.getElementById('login-email');
+  const note = document.getElementById('login-note');
+  const email = (input.value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    note.textContent = 'enter a valid email address';
+    note.style.color = 'var(--orange)'; note.style.opacity = '0.9';
+    return;
+  }
+  note.textContent = 'sending...'; note.style.color = '#EDE9E1'; note.style.opacity = '0.3';
+  const {error} = await _supabase.auth.signInWithOtp({email, options:{emailRedirectTo: window.location.origin}});
+  if(error){
+    note.textContent = error.message || 'something went wrong — try again';
+    note.style.color = 'var(--orange)'; note.style.opacity = '0.9';
+    return;
+  }
+  // Show the "check your email" confirmation state
+  document.getElementById('login-sent-email').textContent = email;
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('login-sent').style.display = 'flex';
+};
+window.resetLogin = function(){
+  document.getElementById('login-sent').style.display = 'none';
+  document.getElementById('login-form').style.display = 'flex';
+  const note = document.getElementById('login-note');
+  note.textContent = "we'll send you a magic link"; note.style.color = '#EDE9E1'; note.style.opacity = '0.3';
 };
 window.arcoSignOut = function(){
   try{localStorage.clear();}catch(e){}
