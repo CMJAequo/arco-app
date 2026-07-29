@@ -1,4 +1,1 @@
-{
-  "outputDirectory": "public",
-  "buildCommand": "echo 'no build needed'"
-}
+{"outputDirectory":"public","buildCommand":"echo done","installCommand":"echo done","framework":null}
