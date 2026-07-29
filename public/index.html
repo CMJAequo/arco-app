@@ -1,400 +1,1730 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#16120d">
-<title>Stack — supplement timing & dose</title>
-<link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Arco — Recovery System</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arco">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="theme-color" content="#1A1612">
+  <link href="https://fonts.googleapis.com/css2?family=Switzer:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --cream:#f0ede6;--bg:#16120d;--panel:#201a11;--panel-2:#271f15;--white:#f4f1ea;
-    --grey:rgba(244,241,234,.58);--grey-dim:rgba(244,241,234,.38);--line:rgba(244,241,234,.10);
-    --orange:#e8580a;--mono:ui-monospace,"SFMono-Regular","SF Mono",Menlo,monospace;
-    --sans:"Switzer",-apple-system,BlinkMacSystemFont,sans-serif;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{-webkit-font-smoothing:antialiased}
-  body{background:var(--cream);font-family:var(--sans);min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center}
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#EDE9E1;
+  --card:#E4DED5;
+  --card-peach:#F5C4A0;
+  --ink:#1A1612;
+  --orange:#E8520A;
+  --orange-track:#F2C9B0;
+  --muted:rgba(26,22,18,0.42);
+  --sep:rgba(26,22,18,0.1);
+  --radius:20px;
+  --font:'Switzer',sans-serif;
+}
+body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:24px 0;}
+.phone{width:390px;min-height:844px;background:var(--bg);border-radius:44px;overflow:hidden;position:relative;box-shadow:0 40px 80px rgba(0,0,0,0.35);}
+.screen{display:none;flex-direction:column;min-height:844px;}
+.screen.active{display:flex;}
 
-  /* App is a real, full-height column. On wider screens it sits as a centred panel on the cream canvas. */
-  .app{width:100%;max-width:440px;height:100vh;height:100dvh;background:var(--bg);
-    display:flex;flex-direction:column;overflow:hidden;position:relative}
-  @media(min-width:480px){
-    body{padding:32px 16px}
-    .app{height:min(880px,calc(100dvh - 64px));border-radius:42px;
-      box-shadow:0 2px 4px rgba(24,21,15,.18),0 40px 80px -34px rgba(24,21,15,.5)}
-  }
+/* STATUS BAR */
+.sb{padding:14px 20px 0;display:flex;justify-content:space-between;align-items:center;background:var(--bg);}
+.sb-time{font-size:12px;font-weight:500;color:var(--ink);}
+.sb-icons{display:flex;gap:5px;align-items:center;}
 
-  .appbar{display:flex;align-items:center;justify-content:space-between;padding:max(18px,env(safe-area-inset-top)) 24px 6px;flex:none}
-  .logo{display:flex;align-items:center;gap:9px;color:var(--white)}
-  .logo .grid{display:grid;grid-template-columns:1fr 1fr;gap:2.5px}
-  .logo .grid b{width:6px;height:6px;background:var(--white);border-radius:1.5px;display:block}
-  .logo .wm{font-size:19px;font-weight:400;letter-spacing:.01em}
-  .appbar .av{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--grey);font-size:12px;font-weight:600;background:none;cursor:pointer}
+/* ONBOARDING */
+.ob-header{background:var(--ink);padding:10px 24px 28px;}
+.ob-logo{color:#EDE9E1;font-size:26px;font-weight:300;letter-spacing:-0.02em;}
+.ob-sub{color:#EDE9E1;font-size:10px;opacity:0.38;letter-spacing:0.08em;margin-top:3px;}
+.ob-body{flex:1;padding:28px 24px 32px;display:flex;flex-direction:column;overflow-y:auto;}
+.step-bar{display:flex;gap:6px;margin-bottom:28px;}
+.step-dot{height:3px;flex:1;border-radius:2px;background:rgba(26,22,18,0.1);transition:background 0.3s;}
+.step-dot.done{background:var(--orange);}
+.step-dot.active{background:var(--ink);}
+.step-title{font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;line-height:1.25;margin-bottom:6px;}
+.step-sub{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:28px;}
+.field-label{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;}
+.field-input,.field-select{width:100%;background:var(--card);border:none;border-radius:12px;padding:14px 16px;font-size:15px;font-family:var(--font);color:var(--ink);outline:none;margin-bottom:16px;transition:box-shadow 0.2s;-webkit-appearance:none;}
+.field-input:focus,.field-select:focus{box-shadow:0 0 0 2px var(--orange);}
+.chip-group{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+.chip{padding:9px 16px;border-radius:24px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--ink);border:1.5px solid transparent;cursor:pointer;transition:all 0.15s;}
+.chip.sel-ink{background:var(--ink);color:#EDE9E1;}
+.chip.sel-orange{background:var(--orange);color:#fff;border-color:var(--orange);}
+.slider-wrap{margin-bottom:4px;}
+.slider-row{display:flex;align-items:center;gap:12px;}
+.slider-row input[type=range]{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--card);outline:none;}
+.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--orange);cursor:pointer;}
+.slider-val{font-size:13px;font-weight:500;color:var(--orange);min-width:20px;text-align:right;}
+.slider-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:5px;margin-bottom:16px;}
+.btn{width:100%;padding:16px;border-radius:14px;border:none;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;transition:opacity 0.15s;margin-top:auto;}
+.btn-ink{background:var(--ink);color:#EDE9E1;}
+.btn-orange{background:var(--orange);color:#fff;}
+.btn:hover{opacity:0.88;}
 
-  .scroll{flex:1;overflow-y:auto;padding:14px 22px 122px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .scroll::-webkit-scrollbar{display:none}
-  .view{display:none}
-  .view.active{display:block;animation:fade .25s ease}
-  @keyframes fade{from{opacity:0}to{opacity:1}}
+/* LOADING */
+.loading-wrap{flex:1;background:var(--ink);display:flex;flex-direction:column;justify-content:center;align-items:center;}
+.loading-logo{color:#EDE9E1;font-size:36px;font-weight:300;letter-spacing:-0.03em;}
+.loading-tag{color:#EDE9E1;font-size:11px;opacity:0.35;letter-spacing:0.08em;margin-top:6px;margin-bottom:48px;}
+.loading-track{width:130px;height:2px;background:rgba(237,233,225,0.12);border-radius:1px;overflow:hidden;}
+.loading-fill{height:100%;background:var(--orange);border-radius:1px;width:0%;transition:width 0.08s linear;}
+.loading-msg{color:#EDE9E1;font-size:12px;opacity:0.35;margin-top:14px;letter-spacing:0.04em;}
 
-  h1{color:var(--white);font-weight:700;font-size:30px;line-height:1.04;letter-spacing:-.025em;margin:6px 0 22px}
-  h1 .o{color:var(--orange)}
-  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grey-dim);margin:6px 0 14px}
+/* DASHBOARD TOP BAR */
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px 14px;background:var(--bg);}
+.topbar-streak{display:flex;align-items:center;gap:5px;background:var(--card);border-radius:20px;padding:6px 12px;}
+.topbar-streak-count{color:var(--ink);font-size:12px;font-weight:500;}
+.topbar-streak-label{color:var(--ink);font-size:12px;font-weight:500;}
+.topbar-grid{display:flex;gap:3px;flex-wrap:wrap;width:18px;}
+.topbar-grid span{width:7px;height:7px;background:var(--ink);border-radius:1px;display:block;opacity:0.5;}
+.topbar-today{display:flex;align-items:center;gap:4px;background:var(--card);border-radius:20px;padding:6px 12px;}
+.topbar-today-label{font-size:12px;color:var(--ink);font-weight:500;}
+.topbar-today-arrow{font-size:10px;color:var(--muted);}
 
-  .add{display:flex;gap:7px;margin-bottom:11px}
-  .add input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:14px;padding:11px 17px;outline:none}
-  .add input::placeholder{color:var(--grey-dim)}
-  .add input:focus{border-color:rgba(244,241,234,.3)}
-  .add button{background:var(--orange);color:#fff;border:none;border-radius:100px;font-family:var(--sans);font-size:14px;font-weight:600;padding:0 18px;cursor:pointer}
-  .quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:26px}
-  .quick .chip{background:transparent;border:1px solid var(--line);border-radius:100px;color:var(--grey);font-family:var(--sans);font-size:12.5px;padding:6px 12px;cursor:pointer}
-  .quick .chip:hover{border-color:rgba(244,241,234,.28)}
-  .quick .chip:active{border-color:var(--orange);color:var(--orange)}
+/* DASH BODY */
+.dash-body{flex:1;padding:0 16px;overflow-y:auto;}
 
-  .block{background:var(--panel);border:1px solid var(--line);border-radius:26px;padding:18px 18px 8px;margin-bottom:12px;animation:rise .3s cubic-bezier(.22,.61,.36,1)}
-  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
-  .bhead{display:flex;align-items:baseline;gap:9px;margin-bottom:6px}
-  .btime{font-size:20px;font-weight:700;color:var(--white);letter-spacing:-.02em;font-family:var(--mono)}
-  .blabel{font-size:13px;font-weight:600;color:var(--white);display:flex;align-items:center;gap:6px}
-  .blabel.sig::after{content:"";width:5px;height:5px;border-radius:50%;background:var(--orange)}
-  .bdesc{font-size:11px;color:var(--grey-dim);margin-left:auto;font-family:var(--mono);letter-spacing:.02em}
+/* ARC SCORE CARD */
+.arc-card{background:var(--card);border-radius:var(--radius);padding:20px 20px 16px;margin-bottom:12px;}
+.arc-label{font-size:10px;color:var(--muted);letter-spacing:0.09em;text-transform:uppercase;text-align:center;margin-bottom:16px;}
+.arc-ring-wrap{display:flex;justify-content:center;margin-bottom:16px;}
+.arc-divider{height:0.5px;background:var(--sep);margin:0 -4px 14px;}
+.arc-stats{display:grid;grid-template-columns:repeat(3,1fr);}
+.arc-stat{text-align:center;padding:0 8px;}
+.arc-stat + .arc-stat{border-left:0.5px solid var(--sep);}
+.arc-stat-label{font-size:9px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;}
+.arc-stat-val{font-size:22px;font-weight:600;color:var(--ink);line-height:1;}
+.arc-stat-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.arc-caption{font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.5;}
 
-  .row{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer;-webkit-tap-highlight-color:transparent}
-  .row:hover .nm{color:#fff}
-  .dot{width:15px;height:15px;border-radius:50%;flex:none;margin-top:2px;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
-  .dot.softgel{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.7),transparent 55%),var(--c)}
-  .dot.capsule{background:linear-gradient(90deg,var(--c) 0 50%,var(--c2) 50% 100%)}
-  .dot.tablet{background:var(--c)}
-  .dot.tablet::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:1px;background:rgba(0,0,0,.22)}
-  .dot.powder{background:var(--c)}
-  .dot.powder::after{content:"";position:absolute;inset:3px;border-radius:50%;border:1px dotted rgba(0,0,0,.25)}
-  .rmain{flex:1;min-width:0}
-  .rtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .nm{font-size:14px;color:var(--white);font-weight:500}
-  .micro{font-size:11px;color:var(--grey-dim)}
-  .rmeta{display:flex;align-items:center;gap:9px;margin-top:3px;flex-wrap:wrap}
-  .dose{font-family:var(--mono);font-size:11px;color:var(--grey)}
-  .adq{font-family:var(--mono);font-size:10px;letter-spacing:.04em;display:flex;align-items:center;gap:4px}
-  .adq.ok{color:var(--grey-dim)}
-  .adq.low{color:var(--orange)}
-  .x{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);color:var(--grey-dim);background:none;font-size:12px;line-height:1;cursor:pointer;flex:none;margin-top:1px}
-  .x:hover{color:var(--grey)}
-  .x:active{color:var(--orange);border-color:var(--orange)}
+/* INSIGHT CARD */
+.insight-card{background:var(--card-peach);border-radius:16px;padding:14px 16px;margin-bottom:12px;border-left:3px solid var(--orange);}
+.insight-label{font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;font-weight:500;}
+.insight-text{font-size:13px;color:var(--ink);line-height:1.6;}
 
-  .note{display:flex;gap:11px;border-radius:20px;padding:13px 15px;margin:6px 0 10px;animation:rise .3s ease}
-  .note.caution{background:rgba(232,88,10,.07);border:1px solid rgba(232,88,10,.32)}
-  .note.synergy{background:var(--panel-2);border:1px solid var(--line)}
-  .note .mk{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px;white-space:nowrap}
-  .note.caution .mk{color:var(--orange)}
-  .note.synergy .mk{color:var(--grey-dim)}
-  .note p{font-size:12.5px;line-height:1.5;color:var(--grey)}
-  .note b{color:var(--white);font-weight:600}
+/* NOW WINDOW CARD */
+.now-card{background:var(--ink);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;}
+.now-window-label{font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;font-weight:500;}
+.now-window-time{font-size:22px;font-weight:500;color:#EDE9E1;letter-spacing:-0.01em;margin-bottom:6px;}
+.now-window-desc{font-size:13px;color:rgba(237,233,225,0.55);line-height:1.55;margin-bottom:14px;}
+.now-window-bar{height:3px;background:rgba(237,233,225,0.12);border-radius:2px;overflow:hidden;margin-bottom:8px;}
+.now-window-fill{height:100%;background:var(--orange);border-radius:2px;transition:width 0.5s ease;}
+.now-window-footer{font-size:11px;color:rgba(237,233,225,0.35);}
 
-  .empty{text-align:center;color:var(--grey-dim);font-size:13px;line-height:1.6;padding:40px 10px}
-  .empty b{color:var(--grey);font-weight:500}
+/* SCHEDULE CARD */
+.schedule-card{background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;}
+.schedule-label{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;}
+.schedule-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--sep);}
+.schedule-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.schedule-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
+.schedule-content{flex:1;}
+.schedule-window{font-size:10px;letter-spacing:0.05em;margin-bottom:2px;font-weight:500;}
+.schedule-activity{font-size:13px;font-weight:500;}
+.schedule-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.45;}
+.schedule-active-pill{display:inline-flex;align-items:center;gap:4px;background:rgba(232,82,10,0.12);border-radius:10px;padding:2px 8px;margin-top:4px;}
+.schedule-active-dot{width:5px;height:5px;border-radius:50%;background:var(--orange);}
+.schedule-active-text{font-size:10px;color:var(--orange);font-weight:500;}
 
-  .disc{font-size:10.5px;color:var(--grey-dim);line-height:1.5;margin-top:18px}
+/* CHECKIN CARD */
+.checkin-card{background:var(--card);border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+.checkin-card-left{}
+.checkin-card-title{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;}
+.checkin-card-sub{font-size:13px;color:var(--ink);}
+.checkin-card-arrow{color:var(--muted);font-size:16px;}
 
-  /* Stack (browse) view */
-  .search{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:14px;padding:11px 17px;outline:none;margin-bottom:16px}
-  .search::placeholder{color:var(--grey-dim)}
-  .search:focus{border-color:rgba(244,241,234,.3)}
-  .libsec{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grey-dim);margin:16px 0 8px}
-  .lib{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer}
-  .lib .rmain{flex:1}
-  .lib .toggle{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);color:var(--grey-dim);background:none;font-size:14px;line-height:1;flex:none;display:grid;place-items:center;cursor:pointer}
-  .lib.in .toggle{background:var(--orange);border-color:var(--orange);color:#fff}
+/* HORMONE CURVE CARD */
+.curve-card{background:var(--card);border-radius:var(--radius);padding:16px 16px 12px;margin-bottom:12px;}
+.curve-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.curve-card-label{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+.legend{display:flex;gap:10px;}
+.legend-item{display:flex;align-items:center;gap:4px;}
+.legend-dot{width:10px;height:2px;border-radius:1px;}
+.legend-label{font-size:9px;color:var(--muted);}
 
-  /* You view */
-  .stat{display:flex;align-items:baseline;gap:8px;margin:4px 0 24px}
-  .stat .n{font-size:44px;font-weight:700;color:var(--white);letter-spacing:-.03em;font-family:var(--mono)}
-  .stat .l{font-size:13px;color:var(--grey)}
-  .panelcard{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:16px 17px;margin-bottom:12px}
-  .panelcard h3{font-size:13px;font-weight:600;color:var(--white);margin-bottom:6px}
-  .panelcard p{font-size:12px;line-height:1.55;color:var(--grey)}
-  .btn-out{background:transparent;border:1px solid var(--line);border-radius:100px;color:var(--white);font-family:var(--sans);font-size:13px;font-weight:500;padding:11px 18px;cursor:pointer;margin-top:4px}
-  .btn-out:hover{border-color:rgba(244,241,234,.3)}
-  .btn-out.danger:active{border-color:var(--orange);color:var(--orange)}
+/* METRICS ROW */
+.metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.metric-card{background:var(--card);border-radius:12px;padding:10px 12px;}
+.metric-label{font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:4px;}
+.metric-val{font-size:20px;font-weight:500;line-height:1;}
 
-  .tabbar{position:absolute;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(20,16,11,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:100px;padding:7px;display:flex;gap:4px;z-index:30}
-  .tab{display:flex;align-items:center;gap:7px;border-radius:100px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--grey);background:none;border:none;cursor:pointer}
-  .tab.active{background:var(--orange);color:#fff;font-weight:600}
-  .tab svg{width:15px;height:15px}
+/* COACH CARD */
+.coach-card{background:var(--card-peach);border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;}
+.coach-dot{width:6px;height:6px;border-radius:50%;background:var(--orange);margin-top:5px;flex-shrink:0;}
+.coach-title{font-size:12px;font-weight:500;color:var(--ink);margin-bottom:3px;}
+.coach-text{font-size:12px;color:rgba(26,22,18,0.65);line-height:1.55;}
 
-  /* Detail sheet */
-  #overlay{position:absolute;inset:0;z-index:50;pointer-events:none}
-  #overlay .scrim{position:absolute;inset:0;background:rgba(8,6,4,.55);opacity:0;transition:opacity .25s}
-  #overlay .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);
-    border-radius:30px 30px 0 0;padding:10px 24px max(28px,env(safe-area-inset-bottom));max-height:88%;overflow-y:auto;
-    transform:translateY(101%);transition:transform .32s cubic-bezier(.22,.61,.36,1);scrollbar-width:none;outline:none}
-  #overlay .sheet::-webkit-scrollbar{display:none}
-  #overlay.open{pointer-events:auto}
-  #overlay.open .scrim{opacity:1}
-  #overlay.open .sheet{transform:translateY(0)}
-  @media(min-width:480px){#overlay .sheet{border-radius:30px 30px 42px 42px}}
-  .handle{width:38px;height:4px;border-radius:100px;background:var(--line);margin:4px auto 18px}
-  .sh-head{display:flex;align-items:center;gap:13px;margin-bottom:14px}
-  .sh-head .dot{width:20px;height:20px;margin-top:0}
-  .sh-name{font-size:22px;font-weight:700;color:var(--white);letter-spacing:-.02em;line-height:1.1}
-  .sh-dose{font-family:var(--mono);font-size:13px;color:var(--grey);margin-top:3px}
-  .verdict{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .verdict.ok{color:var(--white)}
-  .verdict.low{color:var(--orange)}
-  .verdict .vg{font-family:var(--mono);font-size:16px}
-  .sh-label{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--grey-dim);margin-top:18px}
-  .sh-body{font-size:13.5px;line-height:1.6;color:var(--grey);margin-top:6px}
-  .sh-body b{color:var(--white);font-weight:600}
+/* WEEK ROW */
+.week-section-label{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;}
+.week-row{display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:nowrap;}
+.week-day{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+.week-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.week-dot.done{background:var(--ink);}
+.week-dot.wtoday{background:var(--orange);}
+.week-dot.empty{border:0.5px solid var(--sep);}
+.week-dot-label{font-size:9px;color:var(--muted);letter-spacing:0.04em;}
+.week-dot-label.wtoday{color:var(--orange);}
 
-  :focus-visible{outline:2px solid var(--orange);outline-offset:2px}
-  @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+/* BOTTOM NAV */
+.bottom-nav{
+  background:var(--bg);
+  padding:8px 16px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-shrink:0;
+  border-top:0.5px solid var(--sep);
+}
+.nav-item{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:3px;
+  cursor:pointer;
+  padding:8px 12px;
+  border-radius:16px;
+  min-width:56px;
+  transition:background 0.15s;
+}
+.nav-item.active{background:var(--ink);}
+.nav-item-label{font-size:9px;letter-spacing:0.05em;text-transform:uppercase;font-weight:500;}
+.nav-item.active .nav-item-label{color:#EDE9E1;}
+.nav-item:not(.active) .nav-item-label{color:var(--muted);}
+
+/* MODAL */
+.modal-overlay{position:absolute;inset:0;background:rgba(26,22,18,0.45);opacity:0;pointer-events:none;transition:opacity 0.3s;z-index:50;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal-sheet{position:absolute;bottom:0;left:0;right:0;background:var(--bg);border-radius:24px 24px 0 0;padding:20px 24px 40px;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32,0.72,0,1);z-index:51;max-height:88%;overflow-y:auto;}
+.modal-sheet.open{transform:translateY(0);}
+.modal-handle{width:36px;height:4px;border-radius:2px;background:var(--sep);margin:0 auto 20px;}
+.modal-title{font-size:20px;font-weight:400;color:var(--ink);margin-bottom:4px;letter-spacing:-0.01em;}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:22px;}
 </style>
 </head>
 <body>
-  <div class="app">
-    <div class="appbar">
-      <div class="logo"><span class="grid"><b></b><b></b><b></b><b></b></span><span class="wm">&#923;equo</span></div>
-      <button class="av" id="avBtn" aria-label="You">CM</button>
-    </div>
+<div class="phone">
 
-    <div class="scroll">
-      <!-- TODAY -->
-      <section class="view active" id="view-today">
-        <h1>What you take.<br><span class="o">And exactly when.</span></h1>
-        <div class="add">
-          <input id="input" type="text" placeholder="Add what you take" aria-label="Add supplement" autocomplete="off">
-          <button id="addBtn">Add</button>
-        </div>
-        <div class="quick" id="quick"></div>
-        <div id="schedule"></div>
-        <div id="note"></div>
-        <p class="disc">Timing and dose guidance based on published evidence. This app explains what you take and when — it does not diagnose, treat, or prescribe. Dose-adequacy tags reflect research-associated effective ranges, not promises of outcome. Not a substitute for medical advice.</p>
-      </section>
-
-      <!-- STACK / BROWSE -->
-      <section class="view" id="view-stack">
-        <p class="eyebrow">Stack · browse the library</p>
-        <h1 style="font-size:26px;margin-bottom:16px">Add to your stack.</h1>
-        <input class="search" id="search" type="text" placeholder="Search supplements" aria-label="Search supplements" autocomplete="off">
-        <div id="library"></div>
-        <p class="disc">Tap any entry to add or remove it from your stack. Effective ranges are research-associated, not personalised dosing.</p>
-      </section>
-
-      <!-- YOU -->
-      <section class="view" id="view-you">
-        <p class="eyebrow">You</p>
-        <div class="stat"><span class="n" id="stackCount">0</span><span class="l">in your stack</span></div>
-        <div class="panelcard">
-          <h3>Your data stays on this device</h3>
-          <p>Your stack is saved locally in this browser. Nothing is sent to a server. Clearing your browser data, or the button below, will reset it.</p>
-        </div>
-        <div class="panelcard">
-          <h3>Working title</h3>
-          <p>This build still carries the Λequo mark as a placeholder. The name and wordmark are still open.</p>
-        </div>
-        <button class="btn-out danger" id="clearBtn">Clear my stack</button>
-        <p class="disc">Timing and dose guidance based on published evidence. Not a substitute for medical advice. Functional framing only — supplements may support normal physiological function; they do not treat, prevent, or cure disease.</p>
-      </section>
-    </div>
-
-    <nav class="tabbar" role="tablist">
-      <button class="tab active" data-view="today" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
-      <button class="tab" data-view="stack" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Stack</button>
-      <button class="tab" data-view="you" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>You</button>
-    </nav>
-
-    <div id="overlay" aria-hidden="true">
-      <div class="scrim" id="scrim"></div>
-      <div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+<!-- ONBOARDING -->
+<div class="screen active" id="screen-onboard">
+  <div class="sb" style="background:var(--ink);">
+    <span class="sb-time" style="color:#EDE9E1;opacity:0.55;" id="sb-ob">9:41</span>
+    <div class="sb-icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="4" width="3" height="7" rx="1" fill="#EDE9E1" opacity="0.5"/><rect x="4.5" y="2.5" width="3" height="8.5" rx="1" fill="#EDE9E1" opacity="0.7"/><rect x="9" y="0.5" width="3" height="10.5" rx="1" fill="#EDE9E1" opacity="0.9"/><rect x="13.5" y="0.5" width="3" height="10.5" rx="1" fill="#EDE9E1"/></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="#EDE9E1" stroke-opacity="0.35"/><rect x="2" y="2" width="16" height="9" rx="2" fill="#EDE9E1"/><path d="M24 4.5V8.5C24.8 8.2 25.5 7.2 25.5 6.5C25.5 5.8 24.8 4.8 24 4.5Z" fill="#EDE9E1" opacity="0.4"/></svg>
     </div>
   </div>
+  <div class="ob-header">
+    <div class="ob-logo">arco</div>
+    <div class="ob-sub">recovery system</div>
+  </div>
+  <div class="ob-body" id="ob-body"></div>
+</div>
 
+<!-- LOADING -->
+<div class="screen" id="screen-loading">
+  <div class="sb" style="background:var(--ink);">
+    <span class="sb-time" style="color:#EDE9E1;opacity:0.55;" id="sb-load">9:41</span>
+  </div>
+  <div class="loading-wrap">
+    <div class="loading-logo">arco</div>
+    <div class="loading-tag">building your arc</div>
+    <div class="loading-track"><div class="loading-fill" id="load-bar"></div></div>
+    <div class="loading-msg" id="load-msg">analysing your profile...</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="screen" id="screen-dash">
+  <div class="sb" id="dash-sb">
+    <span class="sb-time" id="sb-dash">9:41</span>
+    <div class="sb-icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="4" width="3" height="7" rx="1" fill="#1A1612" opacity="0.4"/><rect x="4.5" y="2.5" width="3" height="8.5" rx="1" fill="#1A1612" opacity="0.6"/><rect x="9" y="0.5" width="3" height="10.5" rx="1" fill="#1A1612" opacity="0.85"/><rect x="13.5" y="0.5" width="3" height="10.5" rx="1" fill="#1A1612"/></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="#1A1612" stroke-opacity="0.3"/><rect x="2" y="2" width="14" height="9" rx="2" fill="#1A1612" opacity="0.7"/></svg>
+    </div>
+  </div>
+  <div class="topbar">
+    <div class="topbar-streak">
+      <span class="topbar-today-arrow" style="transform:rotate(180deg);display:inline-block;">›</span>
+      <span class="topbar-streak-count" id="streak-ct">1</span>
+      <span class="topbar-streak-label">day</span>
+      <span class="topbar-today-arrow">›</span>
+    </div>
+    <span style="font-size:22px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;">arco</span>
+    <div class="topbar-today">
+      <span class="topbar-today-arrow" style="transform:rotate(180deg);display:inline-block;">›</span>
+      <span class="topbar-today-label">Today</span>
+      <span class="topbar-today-arrow">›</span>
+    </div>
+  </div>
+  <div class="dash-body" id="dash-body"></div>
+  <nav class="bottom-nav">
+    <div class="nav-item active" id="nav-today" onclick="switchTab('today',this)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EDE9E1" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="nav-item-label">Today</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('protocol',this)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(26,22,18,0.3)" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="nav-item-label">Protocol</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('learn',this)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(26,22,18,0.3)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+      <span class="nav-item-label">Learn</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('progress',this)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(26,22,18,0.3)" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span class="nav-item-label">Progress</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('profile',this)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(26,22,18,0.3)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <span class="nav-item-label">Profile</span>
+    </div>
+  </nav>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeCheckin()"></div>
+<div class="modal-sheet" id="checkin-modal">
+  <div class="modal-handle"></div>
+  <div class="modal-title" id="ci-question-title">today's question</div>
+  <div class="modal-sub" id="ci-question-sub"></div>
+  <div id="ci-question-body"></div>
+  <button class="btn btn-ink" style="margin-top:20px;" onclick="submitCheckin()">log it →</button>
+</div>
+
+</div>
 <script>
-/* ── Knowledge base ─────────────────────────────────────────────
-   Each entry: name, common dose, time window, form, warm colours,
-   research-associated effective range (eff), optional micro-instruction,
-   optional low-dose flag, search aliases, and interaction tags.
-   Extend this object to grow the database — UI is fully data-driven. */
-const KB={
-  /* Morning · with breakfast */
-  vitamind:{name:"Vitamin D3",dose:"2000 IU",win:"morning",form:"softgel",c:"#e7a33a",micro:"with fat",eff:"1000\u20134000 IU",tags:["fatsoluble"],alias:["d3","cholecalciferol","vitamin d"]},
-  vitamink2:{name:"Vitamin K2 (MK-7)",dose:"100mcg",win:"morning",form:"softgel",c:"#cdb25a",micro:"with vitamin D + fat",eff:"90\u2013180mcg",tags:["fatsoluble"],alias:["k2","mk7","menaquinone"]},
-  vitaminc:{name:"Vitamin C",dose:"500mg",win:"morning",form:"tablet",c:"#e8a86a",eff:"\u2265200mg",alias:["ascorbic acid","vit c"]},
-  vitaminb12:{name:"Vitamin B12",dose:"500mcg",win:"morning",form:"tablet",c:"#d96a6a",micro:"earlier is better",eff:"\u2265250mcg",alias:["b12","cobalamin","methylcobalamin"]},
-  bcomplex:{name:"B-Complex",dose:"1 serving",win:"morning",form:"capsule",c:"#e0a85a",c2:"#b07a30",micro:"can be stimulating",eff:"per label",alias:["b vitamins","vitamin b","b complex"]},
-  omega3:{name:"Omega-3 (fish oil)",dose:"1000mg",win:"morning",form:"softgel",c:"#e8b24a",micro:"with food",eff:"\u22651000mg EPA/DHA",low:true,lownote:"1000mg of fish oil is roughly 300mg EPA/DHA. Research effect is seen at \u22651000mg EPA/DHA \u2014 read the EPA/DHA line on the label, not the capsule size.",tags:["fatsoluble"],alias:["fish oil","epa","dha","omega 3","omega-3"]},
-  creatine:{name:"Creatine",dose:"5g",win:"morning",form:"powder",c:"#e6e0d2",micro:"any time, be consistent",eff:"3\u20135g",alias:["creatine monohydrate","mono"]},
-  caffeine:{name:"Caffeine",dose:"100mg",win:"morning",form:"tablet",c:"#ddd6c8",micro:"before 14:00",eff:"40\u2013200mg",alias:["caf"]},
-  ltyrosine:{name:"L-Tyrosine",dose:"500mg",win:"morning",form:"capsule",c:"#e3ddcd",c2:"#c4bba6",micro:"empty stomach",eff:"500\u20132000mg",alias:["tyrosine"]},
-  rhodiola:{name:"Rhodiola Rosea",dose:"300mg",win:"morning",form:"capsule",c:"#cf9f6a",c2:"#8a6336",micro:"empty stomach, AM",eff:"200\u2013400mg (3% rosavins)",alias:["rhodiola rosea"]},
-  coq10:{name:"CoQ10",dose:"100mg",win:"morning",form:"softgel",c:"#e6b24a",micro:"with fat",eff:"100\u2013200mg",tags:["fatsoluble"],alias:["coenzyme q10","ubiquinol","ubiquinone"]},
-  curcumin:{name:"Curcumin",dose:"500mg",win:"morning",form:"capsule",c:"#e29a2a",c2:"#a8691a",micro:"with fat + piperine",eff:"500\u20131000mg (bioavailable form)",tags:["fatsoluble"],alias:["turmeric","curcuma"]},
-  lionsmane:{name:"Lion's Mane",dose:"1g",win:"morning",form:"capsule",c:"#d8c9a8",c2:"#b09a6e",eff:"500\u20131000mg",alias:["lions mane","hericium"]},
-  iron:{name:"Iron",dose:"18mg",win:"morning",form:"tablet",c:"#c98a6a",micro:"empty stomach if tolerated",eff:"per need / blood work",alias:["ferrous","ferritin"]},
-  calcium:{name:"Calcium",dose:"500mg",win:"morning",form:"tablet",c:"#e9e3d4",micro:"with food, split doses",eff:"500\u20131000mg per dose",alias:["calcium","citrate","carbonate"]},
-  probiotic:{name:"Probiotic",dose:"per label",win:"morning",form:"capsule",c:"#dcd2bf",c2:"#bdb091",micro:"as directed",eff:"strain-dependent",alias:["probiotics","lactobacillus"]},
-  collagen:{name:"Collagen",dose:"10g",win:"morning",form:"powder",c:"#e9e2d2",micro:"any time",eff:"2.5\u201315g",alias:["collagen peptides"]},
+// ── HORMONE ENGINE ──
+const CURVES={
+  cortisol:[[0,.10],[2,.08],[4,.18],[5.5,.45],[6.5,.82],[7.5,.95],[9,.90],[11,.78],[13,.60],[15,.42],[17,.35],[19,.25],[21,.15],[22,.10],[24,.10]],
+  melatonin:[[0,.88],[2,.92],[4,.75],[5.5,.40],[7,.10],[9,.04],[14,.04],[17,.06],[19,.18],[21,.52],[22,.78],[23,.88],[24,.88]],
+  testosterone:[[0,.30],[2,.55],[4,.82],[6,.95],[7.5,1.00],[9,.92],[11,.80],[13,.68],[15,.55],[17,.50],[19,.42],[21,.35],[22,.30],[24,.30]],
+};
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v){return Math.min(1,Math.max(0,v));}
+function baseVal(name,h){
+  const c=CURVES[name];
+  for(let i=0;i<c.length-1;i++){if(h>=c[i][0]&&h<c[i+1][0]){const t=(h-c[i][0])/(c[i+1][0]-c[i][0]);return lerp(c[i][1],c[i+1][1],t);}}
+  return c[c.length-1][1];
+}
+function getHormones(h,p,mod={}){
+  const wake=p.wake??7,sq=p.sleepQuality??3,stress=p.stress??2,train=p.trainingTime??'afternoon',caff=p.caffeine??'morning',age=parseInt(p.age)||25;
+  let cor=baseVal('cortisol',h),mel=baseVal('melatonin',h),tes=baseVal('testosterone',h);
+  cor=clamp(cor-(wake-7)*0.04);
+  const sw=h-wake;if(sw>=0&&sw<0.5)cor=clamp(cor+0.18*(1-sw/0.5));
+  const sqD=(sq-3)*0.07;cor=clamp(cor+sqD);tes=clamp(tes+sqD*0.8);mel=clamp(mel-sqD*0.2);
+  const stD=(stress-2)*0.055;if(h>10&&h<22)cor=clamp(cor+stD);mel=clamp(mel-stD*0.25);
+  if(train==='morning'&&h>=6&&h<=10)tes=clamp(tes+0.09);
+  if(train==='afternoon'&&h>=15&&h<=19){tes=clamp(tes+0.10);cor=clamp(cor+0.05);}
+  if(train==='evening'&&h>=18&&h<=21){tes=clamp(tes+0.07);mel=clamp(mel-0.12);}
+  const agD=age<25?0.05:age>35?-0.08:-(age-25)*0.008;tes=clamp(tes+agD);
+  if(caff==='afternoon'&&h>=19)mel=clamp(mel-0.10);
+  if(caff==='evening'&&h>=18)mel=clamp(mel-0.22);
+  cor=clamp(cor+(mod.cortisol??0));mel=clamp(mel+(mod.melatonin??0));tes=clamp(tes+(mod.testosterone??0));
+  return{cortisol:cor,melatonin:mel,testosterone:tes};
+}
+function getPhase(h,p){
+  const wake=p.wake??7;
+  if(h<wake-0.25)return{label:'deep sleep',advice:'Growth hormone peaks now. Every hour cut short reduces muscle repair and fat metabolism.'};
+  if(h<wake+0.5)return{label:'cortisol awakening',advice:'Cortisol at 50–100% above baseline. Suppresses testosterone for ~45 minutes. Get sunlight now. Don\'t train yet.'};
+  if(h<wake+2.5)return{label:'peak cortisol',advice:'Acetylcholine peak — focus and pattern recognition at their highest. Caffeine now extends the window. After 11:00 it delays sleep onset.'};
+  if(h<13)return{label:'peak focus',advice:'Prefrontal cortex at full capacity. Working memory, decision quality, verbal reasoning all peak now.'};
+  if(h<15)return{label:'afternoon dip',advice:'Core temp dropped ~0.5°C — same trigger as sleep onset. 20 minutes enters Stage 2 sleep and restores alertness. Longer hits slow-wave and impairs waking.'};
+  if(h<17.5)return{label:'recovery window',advice:'Second cortisol curve. Reaction time and verbal processing return. Muscle temp 1°C above baseline, injury risk at daily low.'};
+  if(h<19.5)return{label:'wind down',advice:'Melatonin rising. Blue light delays it by up to 3 hours. Dim lights and reduce screen exposure now.'};
+  if(h<21)return{label:'melatonin rising',advice:'Core temp falling. A warm shower dilates skin vessels to release heat, accelerating the drop and reducing sleep onset time.'};
+  return{label:'sleep prep',advice:'Core temp needs to drop 1°C to trigger sleep onset. Room at 18°C. Every hour of delay compresses slow-wave sleep.'};
+}
+function arcScore(p,checkins,todayMod){
+  const sq=p.sleepQuality??3;
+  const stress=p.stress??2;
+  const streak=getStreak(checkins);
+  const trained=todayMod.trained===true?1:0;
+  const sleepScore=(sq/5)*100;
+  const stressScore=((5-stress)/4)*100;
+  const streakScore=Math.min(streak/30,1)*100;
+  const trainScore=trained*100;
+  return Math.round(sleepScore*0.30+stressScore*0.30+streakScore*0.20+trainScore*0.20);
+}
+function arcLabel(score){
+  if(score>=80)return'OPTIMAL';
+  if(score>=60)return'REGULATED';
+  return'DYSREGULATED';
+}
 
-  /* Evening · wind-down (signature) */
-  ashwagandha:{name:"Ashwagandha KSM-66",dose:"600mg",win:"evening",form:"capsule",c:"#caa46f",c2:"#7a5a32",eff:"300\u2013600mg",micro:"traditionally used to support calm",alias:["ashwagandha","ksm-66","withania"]},
-  theanine:{name:"L-Theanine",dose:"200mg",win:"evening",form:"capsule",c:"#eee7da",c2:"#cfc7b6",eff:"100\u2013200mg",alias:["theanine","l theanine"]},
-  lemonbalm:{name:"Lemon Balm",dose:"300mg",win:"evening",form:"capsule",c:"#bcc49a",c2:"#8a9468",eff:"300\u2013600mg",alias:["melissa","lemonbalm"]},
+// ── STATE ──
+let profile=JSON.parse(localStorage.getItem('arco-profile')||'null');
+if(!profile){profile={name:'Cons',supplements:['vitd','magnesium','omega3','zinc'],wake:7,workStart:9,workEnd:21,workType:'banking',trainingTime:'evening',sleepQuality:3,stress:3};}
+if(!profile.name||profile.name==='you'){profile.name='Cons';}
+if(!profile.supplements){profile.supplements=['vitd','magnesium','omega3','zinc'];}
+try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
+let checkins=JSON.parse(localStorage.getItem('arco-checkins')||'[]');
+let todayMod={cortisol:0,melatonin:0,testosterone:0,trained:false};
+let currentStep=0;
+const DAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+const DAYS_S=['S','M','T','W','T','F','S'];
+const MONTHS=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 
-  /* Pre-bed · as you settle */
-  magnesium:{name:"Magnesium Glycinate",dose:"300mg",win:"prebed",form:"capsule",c:"#efe9dd",c2:"#d3cabb",eff:"\u2265200mg elemental",alias:["magnesium","mag","glycinate"]},
-  zinc:{name:"Zinc Bisglycinate",dose:"15mg",win:"prebed",form:"tablet",c:"#d9d4ca",micro:"with food",eff:"8\u201325mg",alias:["zinc"]},
-  glycine:{name:"Glycine",dose:"3g",win:"prebed",form:"powder",c:"#e6e0d2",eff:"\u22653g",alias:["glycine"]},
-  taurine:{name:"Taurine",dose:"1g",win:"prebed",form:"powder",c:"#e3ddcd",eff:"1\u20132g",alias:["taurine"]},
-  glycinemag:{name:"Apigenin",dose:"50mg",win:"prebed",form:"capsule",c:"#e0d49a",c2:"#bfb070",eff:"50mg",micro:"as you settle",alias:["apigenin","chamomile extract"]},
-  melatonin:{name:"Melatonin",dose:"0.5mg",win:"prebed",form:"tablet",c:"#dcd6c8",micro:"30\u201360 min before bed",eff:"0.5\u20133mg (low often enough)",alias:["melatonin"]}
+function fmtTime(d){return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');}
+function updateClocks(){
+  const t=fmtTime(new Date());
+  ['sb-ob','sb-load','sb-dash'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t;});
+}
+updateClocks();setInterval(updateClocks,15000);
+
+function getStreak(ci){
+  const dates=[...new Set((ci||checkins).map(c=>c.date))].sort().reverse();
+  if(!dates.length)return 1;
+  let s=0;const d=new Date();
+  for(let i=0;i<365;i++){if(dates.includes(d.toDateString())){s++;d.setDate(d.getDate()-1);}else break;}
+  return Math.max(s,1);
+}
+
+// ── STEPS ──
+const steps=[
+  {title:'what\'s your name?',sub:'arco uses it to make things feel personal from day one.',
+   render:()=>`
+    <input class="field-input" id="f-name" placeholder="your first name" type="text" autocomplete="given-name" style="font-size:22px;padding:18px 16px;font-weight:300;letter-spacing:-0.01em;" value="Cons">
+    <div class="field-label" style="margin-top:8px;">age</div>
+    <input class="field-input" id="f-age" placeholder="e.g. 24" type="number" min="16" max="80" inputmode="numeric">
+    <div class="field-label">biological sex</div>
+    <div class="chip-group" id="g-sex">
+      <div class="chip" data-val="male" onclick="selChip(this,'g-sex','ink')">male</div>
+      <div class="chip" data-val="female" onclick="selChip(this,'g-sex','ink')">female</div>
+    </div>`,
+   save:()=>{profile.name=document.getElementById('f-name').value.trim()||'you';profile.age=parseInt(document.getElementById('f-age').value)||25;profile.sex=getChip('g-sex')||'male';}
+  },
+  {title:'how do you sleep?',sub:'sleep is the master variable. everything builds from here.',
+   render:()=>`
+    <div class="field-label">typical wake time</div>
+    <select class="field-select" id="f-wake">${[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===7?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <div class="field-label">typical bedtime</div>
+    <select class="field-select" id="f-bed">${[21,21.5,22,22.5,23,23.5,24,0.5,1].map(h=>{const d=h>=24?h-24:h,hh=Math.floor(d),mm=d%1?'30':'00';return`<option value="${h}"${h===23?' selected':''}>${hh.toString().padStart(2,'0')}:${mm}</option>`;}).join('')}</select>
+    <div class="field-label">average sleep quality</div>
+    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="3" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">3</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
+    <div class="field-label">chronotype</div>
+    <div class="chip-group" id="g-chrono">
+      <div class="chip" data-val="early" onclick="selChip(this,'g-chrono','ink')">early bird</div>
+      <div class="chip" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
+      <div class="chip" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
+    </div>`,
+   save:()=>{profile.wake=parseFloat(document.getElementById('f-wake').value)||7;profile.bed=parseFloat(document.getElementById('f-bed').value)||23;profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;profile.chronotype=getChip('g-chrono')||'neutral';}
+  },
+  {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
+   render:()=>`
+    <div class="field-label">training frequency</div>
+    <div class="chip-group" id="g-freq"><div class="chip" data-val="1-2" onclick="selChip(this,'g-freq','ink')">1–2x / week</div><div class="chip" data-val="3-4" onclick="selChip(this,'g-freq','ink')">3–4x / week</div><div class="chip" data-val="5+" onclick="selChip(this,'g-freq','ink')">5+ / week</div></div>
+    <div class="field-label">typical training time</div>
+    <div class="chip-group" id="g-ttime"><div class="chip" data-val="morning" onclick="selChip(this,'g-ttime','ink')">morning</div><div class="chip" data-val="afternoon" onclick="selChip(this,'g-ttime','ink')">afternoon</div><div class="chip" data-val="evening" onclick="selChip(this,'g-ttime','ink')">evening</div></div>
+    <div class="field-label">typical stress level</div>
+    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="3" step="1" id="f-stress" oninput="document.getElementById('f-stressv').textContent=this.value"><span class="slider-val" id="f-stressv">3</span></div><div class="slider-labels"><span>low</span><span>high</span></div></div>`,
+   save:()=>{profile.trainingFreq=getChip('g-freq')||'3-4';profile.trainingTime=getChip('g-ttime')||'afternoon';profile.stress=parseInt(document.getElementById('f-stress').value)||3;}
+  },
+  {title:'how does your work day look?',sub:'your schedule shapes when focus, rest and training are actually possible.',
+   render:()=>`
+    <div class="field-label">what best describes your work?</div>
+    <div class="chip-group" id="g-work">
+      <div class="chip" data-val="banking" onclick="selChip(this,'g-work','ink')">banking / finance</div>
+      <div class="chip" data-val="corporate" onclick="selChip(this,'g-work','ink')">corporate 9–5</div>
+      <div class="chip" data-val="startup" onclick="selChip(this,'g-work','ink')">startup</div>
+      <div class="chip" data-val="creative" onclick="selChip(this,'g-work','ink')">creative / freelance</div>
+      <div class="chip" data-val="student" onclick="selChip(this,'g-work','ink')">student</div>
+      <div class="chip" data-val="founder" onclick="selChip(this,'g-work','ink')">founder</div>
+    </div>
+    <div class="field-label">work starts at</div>
+    <select class="field-select" id="f-wstart">${[6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===9?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <div class="field-label">work ends at (typical)</div>
+    <select class="field-select" id="f-wend">${[16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,22,23].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===18?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <div class="field-label">do you have any control over your schedule?</div>
+    <div class="chip-group" id="g-flex">
+      <div class="chip" data-val="none" onclick="selChip(this,'g-flex','ink')">very little</div>
+      <div class="chip" data-val="some" onclick="selChip(this,'g-flex','ink')">some flexibility</div>
+      <div class="chip" data-val="full" onclick="selChip(this,'g-flex','ink')">fully flexible</div>
+    </div>`,
+   save:()=>{profile.workType=getChip('g-work')||'corporate';profile.workStart=parseFloat(document.getElementById('f-wstart').value)||9;profile.workEnd=parseFloat(document.getElementById('f-wend').value)||18;profile.flexibility=getChip('g-flex')||'some';}
+  },
+  {title:'a few last things',sub:'small habits that shift your arc more than most people realise.',
+   render:()=>`
+    <div class="field-label">caffeine habit</div>
+    <div class="chip-group" id="g-caff"><div class="chip" data-val="none" onclick="selChip(this,'g-caff','ink')">none</div><div class="chip" data-val="morning" onclick="selChip(this,'g-caff','ink')">morning only</div><div class="chip" data-val="afternoon" onclick="selChip(this,'g-caff','ink')">into afternoon</div><div class="chip" data-val="evening" onclick="selChip(this,'g-caff','ink')">evening too</div></div>
+    <div class="field-label">primary goal</div>
+    <div class="chip-group" id="g-goal"><div class="chip" data-val="performance" onclick="selChip(this,'g-goal','ink')">performance</div><div class="chip" data-val="recovery" onclick="selChip(this,'g-goal','ink')">recovery</div><div class="chip" data-val="focus" onclick="selChip(this,'g-goal','ink')">deep focus</div><div class="chip" data-val="sleep" onclick="selChip(this,'g-goal','ink')">better sleep</div></div>
+    <div class="field-label">morning sunlight?</div>
+    <div class="chip-group" id="g-sun"><div class="chip" data-val="always" onclick="selChip(this,'g-sun','ink')">always</div><div class="chip" data-val="sometimes" onclick="selChip(this,'g-sun','ink')">sometimes</div><div class="chip" data-val="rarely" onclick="selChip(this,'g-sun','ink')">rarely</div></div>`,
+   save:()=>{profile.caffeine=getChip('g-caff')||'morning';profile.goal=getChip('g-goal')||'performance';profile.sunlight=getChip('g-sun')||'sometimes';}
+  },
+  {title:'last few things',sub:'these inputs directly determine your personalised protocol.',
+   render:()=>`
+    <div class="field-label">diet</div>
+    <div class="chip-group" id="g-diet">
+      <div class="chip" data-val="omnivore" onclick="selChip(this,'g-diet','ink')">everything</div>
+      <div class="chip" data-val="low_meat" onclick="selChip(this,'g-diet','ink')">low meat</div>
+      <div class="chip" data-val="vegetarian" onclick="selChip(this,'g-diet','ink')">vegetarian</div>
+      <div class="chip" data-val="vegan" onclick="selChip(this,'g-diet','ink')">vegan</div>
+    </div>
+    <div class="field-label">oily fish (salmon, mackerel, sardines)</div>
+    <div class="chip-group" id="g-fish">
+      <div class="chip" data-val="2plus" onclick="selChip(this,'g-fish','ink')">2+ times/week</div>
+      <div class="chip" data-val="sometimes" onclick="selChip(this,'g-fish','ink')">occasionally</div>
+      <div class="chip" data-val="never" onclick="selChip(this,'g-fish','ink')">never</div>
+    </div>
+    <div class="field-label">alcohol</div>
+    <div class="chip-group" id="g-alcohol">
+      <div class="chip" data-val="none" onclick="selChip(this,'g-alcohol','ink')">none</div>
+      <div class="chip" data-val="low" onclick="selChip(this,'g-alcohol','ink')">1–3 drinks/week</div>
+      <div class="chip" data-val="moderate" onclick="selChip(this,'g-alcohol','ink')">4–7/week</div>
+      <div class="chip" data-val="high" onclick="selChip(this,'g-alcohol','ink')">daily</div>
+    </div>
+    <div class="field-label">any of these?</div>
+    <div class="chip-group" id="g-meds">
+      <div class="chip" data-val="metformin" onclick="toggleChipSup(this)">metformin</div>
+      <div class="chip" data-val="ppi" onclick="toggleChipSup(this)">PPIs / antacids</div>
+      <div class="chip" data-val="statins" onclick="toggleChipSup(this)">statins</div>
+      <div class="chip" data-val="warfarin" onclick="toggleChipSup(this)">warfarin</div>
+      <div class="chip" data-val="none" onclick="toggleChipSup(this)">none</div>
+    </div>`,
+   save:()=>{
+     profile.diet=getChip('g-diet')||'omnivore';
+     profile.fish=getChip('g-fish')||'sometimes';
+     profile.alcohol=getChip('g-alcohol')||'low';
+     profile.meds=[...document.querySelectorAll('#g-meds .sel-ink')].map(c=>c.dataset.val);
+     profile.caffeine='morning';
+     profile.goal='performance';
+     profile.sunlight='sometimes';
+   }
+  }
+];
+
+function getChip(id){const el=document.querySelector(`#${id} .sel-ink, #${id} .sel-orange`);return el?el.dataset.val:null;}
+window.selChip=function(el,groupId,style){
+  document.querySelectorAll(`#${groupId} .chip`).forEach(c=>c.classList.remove('sel-ink','sel-orange'));
+  el.classList.add(style==='orange'?'sel-orange':'sel-ink');
+};
+window.toggleChipSup=function(el){
+  el.classList.toggle('sel-ink');
 };
 
-const WIN=[
-  {id:"morning",time:"07:00",label:"Morning",desc:"With breakfast"},
-  {id:"evening",time:"18:00",label:"Evening",desc:"Wind-down",sig:true},
-  {id:"prebed",time:"22:30",label:"Pre-bed",desc:"As you settle"}
+function renderStep(){
+  const step=steps[currentStep];
+  const dots=steps.map((_,i)=>`<div class="step-dot${i<currentStep?' done':i===currentStep?' active':''}"></div>`).join('');
+  document.getElementById('ob-body').innerHTML=`
+    <div class="step-bar">${dots}</div>
+    <div class="step-title">${step.title}</div>
+    <div class="step-sub">${step.sub}</div>
+    ${step.render()}
+    <div style="flex:1;min-height:16px;"></div>
+    <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>`;
+}
+window.nextStep=function(){
+  steps[currentStep].save();currentStep++;
+  if(currentStep>=steps.length){localStorage.setItem('arco-profile',JSON.stringify(profile));showLoading();}
+  else renderStep();
+};
+
+function showLoading(){
+  showScreen('screen-loading');
+  const msgs=['analysing your inputs...','checking deficiency risk factors...','grading evidence for your profile...','building your protocol...','done.'];
+  let pct=0,mi=0;
+  const bar=document.getElementById('load-bar'),msgEl=document.getElementById('load-msg');
+  const iv=setInterval(()=>{pct+=1.4;bar.style.width=Math.min(pct,100)+'%';if(pct%20<1.5&&mi<msgs.length-1){mi++;msgEl.textContent=msgs[mi];}if(pct>=100){clearInterval(iv);setTimeout(showDiagnosis,400);}},35);
+}
+
+function showDash(){showScreen('screen-dash');buildDash();setInterval(buildDash,60000);}
+
+// ── DIAGNOSIS ENGINE ──
+function runDiagnosis(p){
+  const month = new Date().getMonth()+1;
+  const isWinter = [10,11,12,1,2,3,4].includes(month);
+  const isVegan = p.diet==='vegan';
+  const isVegetarian = p.diet==='vegetarian'||p.diet==='vegan';
+  const noFish = p.fish==='never';
+  const lowFish = p.fish==='sometimes'||p.fish==='never';
+  const highAlcohol = p.alcohol==='high'||p.alcohol==='moderate';
+  const trainsFrequently = ['3-4','5+'].includes(p.trainingFreq);
+  const onMetformin = (p.meds||[]).includes('metformin');
+  const onPPI = (p.meds||[]).includes('ppi');
+  const onStatins = (p.meds||[]).includes('statins');
+  const onWarfarin = (p.meds||[]).includes('warfarin');
+  const highStress = p.stress>=4;
+  const age = parseInt(p.age)||25;
+
+  const results = [];
+
+  // ── VITAMIN D ──
+  const vitdReasons = [];
+  let vitdScore = 0;
+  if(isWinter){vitdScore+=3;vitdReasons.push('Zero cutaneous synthesis at this latitude October–April');}
+  // Indoor workers with rare sunlight are deficient year-round regardless of season
+  if(p.sunlight==='rarely'&&['banking','corporate','startup','founder'].includes(p.workType)){
+    vitdScore+=3;vitdReasons.push('Indoor work 08:00–21:00 + rarely outdoors — effectively zero synthesis year-round');
+  } else if(p.sunlight==='rarely'){vitdScore+=2;vitdReasons.push('Minimal outdoor sun exposure');}
+  else if(p.sunlight==='sometimes'){vitdScore+=1;vitdReasons.push('Limited sun exposure');}
+  if(trainsFrequently){vitdScore+=1;vitdReasons.push('Training sweat losses increase turnover');}
+  if(vitdScore>=3) results.push({id:'vitd',confidence:'HIGH',score:vitdScore,reasons:vitdReasons,
+    note:'Most people in Northern Europe are deficient October–April. This is the single highest-yield intervention for your profile.',
+    contraindicated: false});
+
+  // ── MAGNESIUM ──
+  const mgReasons = [];
+  let mgScore = 0;
+  if(trainsFrequently){mgScore+=3;mgReasons.push('Sweat losses ~2.5–3 mg per session');}
+  if(highAlcohol){mgScore+=2;mgReasons.push('Alcohol causes renal magnesium wasting');}
+  if(onPPI){mgScore+=2;mgReasons.push('PPIs impair magnesium absorption — FDA hypomagnesemia warning');}
+  if(highStress){mgScore+=1;mgReasons.push('Cortisol promotes renal magnesium wasting');}
+  if(mgScore>=2) results.push({id:'magnesium',confidence:mgScore>=4?'HIGH':'MODERATE',score:mgScore,reasons:mgReasons,
+    note:'Glycinate form specifically — oxide (most commonly sold) absorbs at ~4% vs glycinate at ~80%.',
+    contraindicated: false});
+
+  // ── OMEGA-3 ──
+  const o3Reasons = [];
+  let o3Score = 0;
+  if(noFish){o3Score+=3;o3Reasons.push('No oily fish intake — primary dietary source is absent');}
+  else if(lowFish){o3Score+=2;o3Reasons.push('Less than 2 portions of oily fish per week');}
+  if(isVegetarian){o3Score+=2;o3Reasons.push('ALA to EPA conversion is less than 10% — plant sources insufficient');}
+  if(o3Score>=2) results.push({id:'omega3',confidence:o3Score>=4?'HIGH':'MODERATE',score:o3Score,reasons:o3Reasons,
+    note:'Check EPA content specifically — most capsules contain only ~300 mg EPA+DHA per 1,000 mg capsule.',
+    contraindicated: false});
+
+  // ── CREATINE ── (not a deficiency but high-evidence performance add)
+  const crReasons = [];
+  let crScore = 0;
+  if(trainsFrequently){crScore+=3;crReasons.push('Resistance training amplifies creatine benefit significantly');}
+  if(isVegetarian){crScore+=2;crReasons.push('Vegans and vegetarians have ~20–30% lower baseline muscle creatine');}
+  if(crScore>=2) results.push({id:'creatine',confidence:'HIGH',score:crScore,reasons:crReasons,
+    note:'Not a deficiency — the highest-evidence performance supplement that exists. 3–5 g/day monohydrate.',
+    contraindicated: false});
+
+  // ── ZINC ──
+  const znReasons = [];
+  let znScore = 0;
+  if(isVegetarian){znScore+=3;znReasons.push('Phytate in grains and legumes chelates zinc. Requirements ~50% higher');}
+  if(trainsFrequently){znScore+=2;znReasons.push('Sweat and urinary losses during training');}
+  if(highAlcohol){znScore+=1;znReasons.push('Alcohol impairs zinc absorption');}
+  if(znScore>=2) results.push({id:'zinc',confidence:znScore>=4?'HIGH':'MODERATE',score:znScore,reasons:znReasons,
+    note:'Bisglycinate or picolinate form only — oxide is 43% less bioavailable. Pair with 1–2 mg copper.',
+    contraindicated: false});
+
+  // ── B12 ──
+  const b12Reasons = [];
+  let b12Score = 0;
+  if(isVegan){b12Score+=5;b12Reasons.push('Vegan diet — B12 is absent from plant foods. Supplementation is mandatory');}
+  else if(isVegetarian){b12Score+=3;b12Reasons.push('Vegetarian diet — limited dietary B12 sources');}
+  if(onMetformin){b12Score+=3;b12Reasons.push('Metformin use — OR 4.72 for deficiency vs non-users (PLoS One 2018)');}
+  if(onPPI){b12Score+=2;b12Reasons.push('PPIs reduce acid needed to release food-bound B12');}
+  if(age>=50){b12Score+=2;b12Reasons.push('Absorption declines with age due to reduced intrinsic factor');}
+  if(b12Score>=2) results.push({id:'b12',confidence:b12Score>=4?'HIGH':'MODERATE',score:b12Score,reasons:b12Reasons,
+    note:'1,000 µg/day oral. Methyl vs cyano form makes minimal difference for most people despite marketing claims.',
+    contraindicated: false});
+
+  // ── ASHWAGANDHA ──
+  const ashReasons = [];
+  let ashScore = 0;
+  if(highStress){ashScore+=3;ashReasons.push('Elevated stress — KSM-66 reduced cortisol ~27.9% in RCT (Chandrasekhar 2012)');}
+  if(trainsFrequently&&highStress){ashScore+=1;ashReasons.push('Combined training stress + psychological stress increases HPA axis load');}
+  if(ashScore>=3) results.push({id:'ashwagandha',confidence:'MODERATE',score:ashScore,reasons:ashReasons,
+    note:'KSM-66 extract specifically at 600 mg/day. Effect accumulates over 4–8 weeks. Legal claim status in UK is unclear — avoid disease claims.',
+    contraindicated: false});
+
+  // ── COQ10 ──
+  if(onStatins){
+    results.push({id:'coq10',confidence:'MODERATE',score:3,
+      reasons:['Statins inhibit HMG-CoA reductase — the shared pathway for both cholesterol and CoQ10 synthesis'],
+      note:'Ubiquinol form. 100–200 mg/day with a fat-containing meal. Note: NICE does not currently recommend this for statin myopathy but depletion is real.',
+      contraindicated: false});
+  }
+
+  // ── K2 ── contraindicated on warfarin
+  if(!onWarfarin && vitdScore>=3){
+    results.push({id:'k2',confidence:'MODERATE',score:2,
+      reasons:['Vitamin D increases calcium absorption — K2 MK-7 directs it to bone, not arteries'],
+      note:'MK-7 form, 90–180 µg/day. Synergistic with Vitamin D. ABSOLUTE contraindication if on warfarin.',
+      contraindicated: false});
+  }
+  if(onWarfarin){
+    results.push({id:'k2',confidence:'CONTRAINDICATED',score:0,
+      reasons:['Warfarin detected — K2 directly antagonises vitamin K antagonist anticoagulants'],
+      note:'Do not take K2 with warfarin without physician supervision.',
+      contraindicated: true});
+  }
+
+  // Sort by score descending, contraindicated last
+  results.sort((a,b)=>{
+    if(a.contraindicated&&!b.contraindicated) return 1;
+    if(!a.contraindicated&&b.contraindicated) return -1;
+    return b.score-a.score;
+  });
+
+  return results;
+}
+
+function showDiagnosis(){
+  showScreen('screen-dash');
+  const diagnosis = runDiagnosis(profile);
+  // Set supplements from diagnosis (non-contraindicated only)
+  profile.supplements = diagnosis.filter(d=>!d.contraindicated).map(d=>d.id);
+  localStorage.setItem('arco-profile', JSON.stringify(profile));
+
+  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.5)', CONTRAINDICATED:'#cc3333'};
+  const evidenceBadge = id => {
+    const s = SUPPLEMENTS[id];
+    if(!s) return '';
+    const c = s.evidence==='STRONG'?'#4BB87B':s.evidence==='MODERATE'?'rgba(26,22,18,0.4)':'rgba(26,22,18,0.25)';
+    return `<span style="font-size:9px;color:${c};border:0.5px solid ${c};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;">${s.evidence}</span>`;
+  };
+
+  const rows = diagnosis.map((d,i)=>{
+    const s = SUPPLEMENTS[d.id];
+    if(!s) return '';
+    const confColor = confidenceColors[d.confidence]||'var(--muted)';
+    const isLast = i === diagnosis.length-1;
+    const reasons = d.reasons.map(r=>`
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:3px 0 3px 10px;border-left:1.5px solid var(--sep);">${r}</div>
+    `).join('');
+    return `<div style="padding:16px 0;${isLast?'':'border-bottom:0.5px solid var(--sep);'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:500;color:${d.contraindicated?'rgba(26,22,18,0.3)':'var(--ink)'};">${s.name}</span>
+          ${evidenceBadge(d.id)}
+        </div>
+        <span style="font-size:10px;font-weight:600;color:${confColor};letter-spacing:0.07em;text-transform:uppercase;flex-shrink:0;margin-left:8px;">${d.confidence}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${s.dose} · ${s.best_form}</div>
+      <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:${d.note?'8px':'0'};">${reasons}</div>
+      ${d.note?`<div style="font-size:11px;color:rgba(26,22,18,0.45);line-height:1.55;padding:6px 8px;background:rgba(26,22,18,0.04);border-radius:6px;">${d.note}</div>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('dash-body').innerHTML=`
+    <div style="padding:4px 0 16px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">your protocol</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;line-height:1.2;margin-bottom:6px;">${diagnosis.filter(d=>!d.contraindicated).length} supplements recommended</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.55;">Ranked by deficiency risk for your profile. Evidence grades from Examine.com and PubMed. This is risk inference — not a clinical diagnosis.</div>
+    </div>
+
+    <div style="background:var(--card);border-radius:var(--radius);padding:0 18px;margin-bottom:16px;">
+      ${rows}
+    </div>
+
+    <button onclick="buildDash()" style="width:100%;padding:16px;border-radius:14px;border:none;background:var(--ink);color:#EDE9E1;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:20px;">view my daily protocol →</button>
+  `;
+}
+
+function buildDash(){
+  const now=new Date(),h=now.getHours()+now.getMinutes()/60;
+  const phase=getPhase(h,profile);
+  const score=arcScore(profile,checkins,todayMod);
+  const label=arcLabel(score);
+  const streak=getStreak(checkins);
+  const weekCheckins=checkins.filter(c=>{const d=new Date(c.date),today=new Date();today.setHours(0,0,0,0);const diff=(today-d)/86400000;return diff<7;}).length;
+  document.getElementById('streak-ct').textContent=streak;
+
+  const dayNum=checkins.length+1;
+  const name = (profile && profile.name && profile.name !== 'you') ? profile.name : 'Cons';
+  const hr=now.getHours();
+  const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
+
+  document.getElementById('dash-body').innerHTML=`
+    <div class="arc-card">
+      <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
+      <div class="arc-ring-wrap" style="position:relative;">
+        <canvas id="main-clock" width="680" height="680" style="display:block;width:290px;height:290px;"></canvas>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+          <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:18px;margin-top:4px;margin-bottom:2px;">
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#4BB87B;flex-shrink:0;"></div>
+          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">taken</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#E8520A;flex-shrink:0;"></div>
+          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">take now</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:rgba(26,22,18,0.2);flex-shrink:0;"></div>
+          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">upcoming</span>
+        </div>
+      </div>
+    </div>
+
+    ${buildProtocolCard(h, profile)}
+
+    <div class="now-card" style="margin-bottom:12px;">
+      <div class="now-window-label">open window</div>
+      <div class="now-window-time">${windowTimeStr(h, profile)}</div>
+      <div class="now-window-desc">${getCurrentWindow(h,profile).desc}</div>
+      <div class="now-window-bar">
+        <div class="now-window-fill" style="width:${windowProgress(h,profile)}%;"></div>
+      </div>
+      <div class="now-window-footer">${windowRemaining(h,profile)} remaining</div>
+    </div>
+
+    <div class="week-section-label" style="margin-top:4px;">your week</div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:14px 12px 10px;margin-bottom:12px;">
+      ${buildWeekRow()}
+    </div>
+
+    <div class="checkin-card" onclick="openCheckin()">
+      <div class="checkin-card-left">
+        <div class="checkin-card-title">check in</div>
+        <div class="checkin-card-sub">How's your ${greeting} going?</div>
+      </div>
+      <div class="checkin-card-arrow">›</div>
+    </div>
+    <div style="height:20px;"></div>
+  `;
+  // Start animation loop for pulsing markers
+  if(!window._clockLoop){
+    window._clockLoop = true;
+    (function loop(){
+      const now2=new Date();
+      const h2=now2.getHours()+now2.getMinutes()/60;
+      drawClock(h2);
+      requestAnimationFrame(loop);
+    })();
+  } else {
+    drawClock(h);
+  }
+}
+
+function drawClock(h){
+  const canvas=document.getElementById('main-clock');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=2;
+  const cx=170*dpr,cy=170*dpr,r=104*dpr,inner=63*dpr,SW=26*dpr;
+  ctx.clearRect(0,0,680,680);
+
+  const wake=profile.wake??7;
+  const workStart=profile.workStart??9;
+  const workEnd=profile.workEnd??18;
+  const trainTime=profile.trainingTime??'evening';
+  const trainStart=trainTime==='morning'?wake+0.5:trainTime==='afternoon'?15:workEnd+0.5;
+  const trainEnd=Math.min(trainStart+1.5,22);
+
+  // Color stops at specific hours — the ring flows through these
+  // Format: [hour, r, g, b, brightness 0-1]
+  // Sleep=dark amber, wake=bright yellow, focus=bright orange, work=dark grey,
+  // recovery=gold, train=bright amber, wind=deep amber fading to dark
+  const colorMap=[
+    {h:0,    r:120,g:80, b:10},   // dark sleep — deep amber brown
+    {h:wake-0.25,r:100,g:65,b:8}, // just before wake — slightly lighter
+    {h:wake, r:255,g:214,b:10},   // wake — bright yellow
+    {h:wake+1,r:255,g:160,b:10},  // peak cortisol — orange
+    {h:workStart,r:80,g:75,b:60}, // work starts — muted dark
+    {h:workStart+2,r:60,g:58,b:48},// deep work — darkest
+    {h:workEnd-1,r:70,g:65,b:50}, // late work — still dark
+    {h:workEnd,r:180,g:130,b:20}, // work ends — warming up
+    {h:trainStart,r:255,g:190,b:10},// train start — bright gold
+    {h:trainStart+0.75,r:255,g:160,b:5},// peak train — deep orange
+    {h:trainEnd,r:200,g:140,b:15},// train ends — settling
+    {h:22,   r:140,g:95,b:12},   // wind down — amber
+    {h:23,   r:100,g:68,b:10},   // pre sleep — dark amber
+    {h:24,   r:120,g:80,b:10},   // midnight — dark again
+  ];
+
+  function getColor(hour){
+    for(let i=0;i<colorMap.length-1;i++){
+      if(hour>=colorMap[i].h&&hour<colorMap[i+1].h){
+        const t=(hour-colorMap[i].h)/(colorMap[i+1].h-colorMap[i].h);
+        const ease=t<0.5?2*t*t:(4-2*t)*t-1; // smooth ease
+        return{
+          r:Math.round(colorMap[i].r+(colorMap[i+1].r-colorMap[i].r)*ease),
+          g:Math.round(colorMap[i].g+(colorMap[i+1].g-colorMap[i].g)*ease),
+          b:Math.round(colorMap[i].b+(colorMap[i+1].b-colorMap[i].b)*ease),
+        };
+      }
+    }
+    return colorMap[colorMap.length-1];
+  }
+
+  // Draw ring as tiny arc segments, each with interpolated color
+  const STEPS=360;
+  for(let i=0;i<STEPS;i++){
+    const t0=i/STEPS,t1=(i+1)/STEPS;
+    const h0=t0*24,h1=t1*24;
+    const hMid=(h0+h1)/2;
+    const a0=t0*Math.PI*2-Math.PI/2;
+    const a1=t1*Math.PI*2-Math.PI/2;
+    const c=getColor(hMid);
+    const isActive=hMid>=h-0.5&&hMid<h+0.5; // near current time
+    const isCurrent=hMid>=0&&hMid<=h; // passed hours always full bright? No — only current hour is brightest
+    // Dimming: past and future are 55% brightness, current window is 100%
+    const inCurrentWindow=(()=>{
+      const wins=getWindowsSimple();
+      return wins.some(w=>hMid>=w.s&&hMid<w.e&&h>=w.s&&h<w.e);
+    })();
+    const brightness=inCurrentWindow?1.0:0.45;
+    const rr=Math.round(c.r*brightness+(255-255)*0+(inCurrentWindow?0:0));
+    const gg=Math.round(c.g*brightness);
+    const bb=Math.round(c.b*brightness);
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,a0-0.002,a1+0.002);
+    ctx.strokeStyle=`rgb(${rr},${gg},${bb})`;
+    ctx.lineWidth=SW;
+    ctx.lineCap='butt';
+    ctx.stroke();
+  }
+
+  // Thin track behind — draw full circle in very dark first
+  // (already rendered above, this gives depth)
+
+  // Inner face
+  ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
+
+  // Supplement markers — connector line → dot → label
+  const ABBREV = {
+    vitd:'D3', magnesium:'Mg', omega3:'ω3', zinc:'Zn',
+    creatine:'Cr', ashwagandha:'Ash', b12:'B12', k2:'K2',
+    coq10:'Q10', magnesium_threonate:'MgT', iron:'Fe'
+  };
+  const sups2 = profile.supplements || [];
+  const hourGroups2 = {};
+  sups2.forEach(key => {
+    const s = SUPPLEMENTS[key]; if(!s) return;
+    if(!hourGroups2[s.window[0]]) hourGroups2[s.window[0]] = [];
+    hourGroups2[s.window[0]].push(key);
+  });
+
+  // Pulse factor — oscillates 0→1→0 over ~2 seconds
+  const pulse = (Math.sin(Date.now() / 400) + 1) / 2;
+  const dotR = 5*dpr;
+
+  sups2.forEach(key => {
+    const s = SUPPLEMENTS[key]; if(!s) return;
+    const taken2 = takenToday.includes(key);
+    const isDue2 = h >= s.window[0] && h < s.window[1];
+    const group2 = hourGroups2[s.window[0]];
+    const idx2 = group2.indexOf(key);
+    const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 0.7 : 0;
+    const ma2 = ((s.window[0] + spread2) / 24) * Math.PI * 2 - Math.PI / 2;
+
+    const ringEdge  = r + SW/2;
+    const dotDist   = ringEdge + 12*dpr;
+    const lblDist   = ringEdge + 36*dpr;   // further from dot
+    const lineStart = ringEdge + 3*dpr;
+
+    const dx2 = cx + Math.cos(ma2) * dotDist;
+    const dy2 = cy + Math.sin(ma2) * dotDist;
+    const lx2 = cx + Math.cos(ma2) * lblDist;
+    const ly2 = cy + Math.sin(ma2) * lblDist;
+    const lnx1 = cx + Math.cos(ma2) * lineStart;
+    const lny1 = cy + Math.sin(ma2) * lineStart;
+
+    const dotCol = taken2 ? '#4BB87B' : isDue2 ? '#E8520A' : 'rgba(26,22,18,0.22)';
+    const txtCol = taken2 ? '#4BB87B' : isDue2 ? '#E8520A' : 'rgba(26,22,18,0.32)';
+
+    // No connector line — removed
+
+    // Pulsating halo — only for due supplements
+    if(isDue2 && !taken2){
+      const haloR = dotR + (4 + pulse * 5) * dpr;
+      ctx.beginPath();
+      ctx.arc(dx2, dy2, haloR, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(232,82,10,${0.06 + pulse * 0.1})`;
+      ctx.fill();
+    }
+
+    // Main dot
+    ctx.beginPath();
+    ctx.arc(dx2, dy2, dotR, 0, Math.PI*2);
+    ctx.fillStyle = dotCol;
+    ctx.fill();
+
+    // Yellow pulsing centre — only for due
+    if(isDue2 && !taken2){
+      const coreR = (1.5 + pulse * 1.5) * dpr;
+      ctx.beginPath();
+      ctx.arc(dx2, dy2, coreR, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,214,0,${0.7 + pulse * 0.3})`;
+      ctx.fill();
+    }
+
+    // Label — bigger, further out
+    ctx.font = `600 ${9.5*dpr}px Switzer,sans-serif`;
+    ctx.fillStyle = txtCol;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ABBREV[key] || key.slice(0,3).toUpperCase(), lx2, ly2);
+  });
+
+  // Hour labels — centered in grey band between inner face and ring
+  const bandMid = inner + (r - SW/2 - inner) / 2;
+  for(let i=0;i<24;i+=6){
+    const a=(i/24)*Math.PI*2-Math.PI/2;
+    ctx.font=`500 ${11*dpr}px Switzer,sans-serif`;
+    ctx.fillStyle='rgba(26,22,18,0.38)';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(i===0?'0':i+'h',cx+Math.cos(a)*bandMid,cy+Math.sin(a)*bandMid);
+  }
+
+  // Current time marker — pulsating
+  const angle=(h/24)*Math.PI*2-Math.PI/2;
+  const mx=cx+Math.cos(angle)*r,my=cy+Math.sin(angle)*r;
+  const pulse2=(Math.sin(Date.now()/500)+1)/2; // 0→1→0
+  // Outer pulsing halo
+  const haloR2=(10+pulse2*8)*dpr;
+  ctx.beginPath();ctx.arc(mx,my,haloR2,0,Math.PI*2);
+  ctx.fillStyle=`rgba(255,255,255,${0.08+pulse2*0.12})`;
+  ctx.fill();
+  // White ring
+  ctx.beginPath();ctx.arc(mx,my,8*dpr,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.95)';ctx.fill();
+  // Dark centre
+  ctx.beginPath();ctx.arc(mx,my,5*dpr,0,Math.PI*2);
+  ctx.fillStyle='#1A1612';ctx.fill();
+  // Pulsing bright yellow core
+  const coreR=(2+pulse2*1.5)*dpr;
+  ctx.beginPath();ctx.arc(mx,my,coreR,0,Math.PI*2);
+  ctx.fillStyle=`rgba(255,214,0,${0.8+pulse2*0.2})`;
+  ctx.fill();
+}
+
+function getWindowsSimple(){
+  const wake=profile.wake??7;
+  const workStart=profile.workStart??9;
+  const workEnd=profile.workEnd??18;
+  const trainTime=profile.trainingTime??'evening';
+  const trainStart=trainTime==='morning'?wake+0.5:trainTime==='afternoon'?15:workEnd+0.5;
+  const trainEnd=Math.min(trainStart+1.5,22);
+  return[
+    {s:0,e:wake-0.25},
+    {s:wake-0.25,e:wake+0.5},
+    {s:wake+0.5,e:workStart},
+    {s:workStart,e:workEnd},
+    {s:workEnd,e:trainStart},
+    {s:trainStart,e:trainEnd},
+    {s:trainEnd,e:24},
+  ].filter(seg=>seg.s<seg.e);
+}
+
+function getWindows(p){
+  const wake=p.wake??7;
+  const workStart=p.workStart??9;
+  const workEnd=p.workEnd??18;
+  const workType=p.workType??'corporate';
+  const flex=p.flexibility??'some';
+  const trainTime=p.trainingTime??'evening';
+
+  // Derive training window from profile
+  const trainStart=trainTime==='morning'?wake+0.5:trainTime==='afternoon'?15:workEnd+0.5;
+  const trainEnd=Math.min(trainStart+1.5, 22);
+
+  // High-demand jobs compress the schedule — less discretionary time
+  const highDemand=['banking','startup','founder'].includes(workType);
+  const actualWorkEnd=highDemand&&workEnd<20?workEnd+1:workEnd;
+
+  // Build windows around the real day
+  const windows=[];
+
+  // Sleep
+  windows.push({start:0,end:wake-0.25,label:'sleep',activity:'deep sleep',desc:'Growth hormone peaks in slow-wave sleep. Every hour cut short reduces muscle repair and fat metabolism.'});
+
+  // Wake + cortisol rise
+  windows.push({start:wake-0.25,end:wake+0.5,label:'cortisol awakening',activity:'wake up',desc:'Cortisol spikes 50–100% above baseline in the first 30 minutes. Suppresses testosterone for ~45 minutes. Get sunlight now. Don\'t train yet.'});
+
+  // Pre-work focus window (if there is one)
+  if(workStart>wake+1.5){
+    windows.push({start:wake+0.5,end:workStart,label:'pre-work focus',activity:'deep work',desc:'Acetylcholine is peaking — the neurotransmitter behind focus and pattern recognition. Caffeine now extends this window. After 11:00 it delays sleep onset.'});
+  }
+
+  // Work block — split based on flexibility
+  if(flex==='full'||flex==='some'){
+    windows.push({start:workStart,end:Math.min(workStart+3,13),label:'peak focus block',activity:'deep work',desc:'Prefrontal cortex at full capacity — working memory, decision quality, and verbal reasoning all peak now.'});
+    if(workStart+3<13){
+      windows.push({start:13,end:Math.min(14,actualWorkEnd),label:'communication block',activity:'meetings & email',desc:'Cortisol declining, social cognition still strong. Verbal fluency peaks here. Optimal for calls and negotiations.'});
+    }
+    const dipStart=Math.max(13,workStart+3);
+    const dipEnd=Math.min(dipStart+1.5,actualWorkEnd);
+    if(dipEnd>dipStart&&actualWorkEnd>14){
+      windows.push({start:dipStart,end:dipEnd,label:'afternoon dip',activity:'low-stakes tasks',desc:'Core temperature drops ~0.5°C — same trigger as sleep onset. A 20-minute rest enters Stage 2 sleep and restores alertness. Longer hits slow-wave and impairs waking.'});
+    }
+    if(actualWorkEnd>dipEnd+0.5){
+      windows.push({start:dipEnd,end:actualWorkEnd,label:'late work block',activity:'collaborative work',desc:'A second cortisol curve emerges mid-afternoon. Reaction time and verbal processing return.'});
+    }
+  } else {
+    windows.push({start:workStart,end:Math.min(actualWorkEnd,24),label:'work',activity:'work',desc:`Cortisol peaks in the first 2 hours of work. After 13:00 a biological dip reduces cognitive output — use it for admin.`});
+  }
+
+  // Training
+  if(trainStart>=actualWorkEnd||trainTime==='morning'){
+    windows.push({start:trainStart,end:trainEnd,label:'training',activity:'Physical training',desc:'Muscle temperature 1°C above baseline, tendon elasticity peaks, pain tolerance elevated. Testosterone stays primed 15–45 minutes post-session — eat protein in that window.'});
+  }
+
+  // Sleep prep
+  const sleepPrepStart=Math.max(actualWorkEnd,trainEnd,21);
+  windows.push({start:sleepPrepStart,end:24,label:'sleep prep',activity:'prepare for sleep',desc:'Core temperature needs to drop 1°C to trigger sleep onset. A warm shower dilates skin vessels to release heat, accelerating the drop. Blue light delays melatonin by up to 3 hours.'});
+
+  return windows;
+}
+
+function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
+
+function getCurrentWindow(h,p){
+  const windows=getWindows(p);
+  return windows.find(w=>h>=w.start&&h<w.end)||windows[windows.length-1];
+}
+
+function windowTimeStr(h,p){
+  const w=getCurrentWindow(h,p);
+  return fmt(w.start)+' — '+fmt(w.end);
+}
+
+function windowProgress(h,p){
+  const w=getCurrentWindow(h,p);
+  const pct=((h-w.start)/(w.end-w.start))*100;
+  return Math.min(Math.max(pct,2),98);
+}
+
+function windowRemaining(h,p){
+  const w=getCurrentWindow(h,p);
+  const mins=Math.round((w.end-h)*60);
+  if(mins>=60){const hrs=Math.floor(mins/60),m=mins%60;return hrs+'h'+(m>0?' '+m+'m':'');}
+  return mins+'m';
+}
+
+function buildSchedule(h,p){
+  const windows=getWindows(p);
+  return windows.map(w=>{
+    const isActive=h>=w.start&&h<w.end;
+    const isPast=h>=w.end;
+    const activeStyle=isActive?'border-left:2px solid var(--orange);padding-left:10px;margin-left:-10px;':'';
+    const windowColor=isActive?'var(--orange)':isPast?'rgba(26,22,18,0.22)':'rgba(26,22,18,0.4)';
+    const activityColor=isActive?'var(--ink)':isPast?'rgba(26,22,18,0.28)':'var(--ink)';
+    const descOpacity=isPast?'0.3':isActive?'0.65':'0.55';
+    const nowPill=isActive?`<div style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;"><div style="width:5px;height:5px;border-radius:50%;background:var(--orange);"></div><span style="font-size:10px;color:var(--orange);font-weight:500;letter-spacing:0.04em;">now</span></div>`:'';
+    return`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--sep);${activeStyle}">
+      <div style="font-size:10px;font-weight:500;letter-spacing:0.05em;color:${windowColor};margin-bottom:3px;">${fmt(w.start)} — ${fmt(w.end)}</div>
+      <div style="font-size:13px;font-weight:500;color:${activityColor};margin-bottom:3px;">${w.activity}</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;opacity:${descOpacity};">${w.desc}</div>
+      ${nowPill}
+    </div>`;
+  }).join('').replace(/border-bottom[^;]+;(?=\s*$)/,'');
+}
+
+// ── ROTATING DAILY QUESTIONS ──
+const DAILY_QUESTIONS = [
+  {
+    key:'sleep', type:'slider', min:1, max:5,
+    title:'How did you sleep last night?',
+    sub:'Sleep is the variable everything else builds from.',
+    labels:['terrible','excellent'],
+    default:3
+  },
+  {
+    key:'energy', type:'chips',
+    title:'How is your energy right now?',
+    sub:'Rate honestly — not how you think it should be.',
+    options:['very low','low','okay','good','high'],
+    vals:['1','2','3','4','5']
+  },
+  {
+    key:'focus', type:'chips',
+    title:'How clear was your thinking this morning?',
+    sub:'Focus quality is a direct proxy for sleep and magnesium status.',
+    options:['scattered','unfocused','okay','sharp','very sharp'],
+    vals:['1','2','3','4','5']
+  },
+  {
+    key:'trained', type:'chips',
+    title:'Did you train today?',
+    sub:'Training timing affects your hormone curve for the next 16 hours.',
+    options:['yes','not yet','rest day'],
+    vals:['yes','no','rest']
+  },
+  {
+    key:'stress', type:'slider', min:1, max:5,
+    title:'What is your stress level today?',
+    sub:'Cortisol promotes magnesium wasting — this calibrates your protocol.',
+    labels:['calm','high'],
+    default:2
+  },
+  {
+    key:'crash', type:'chips',
+    title:'Did you have an afternoon energy crash?',
+    sub:'A crash between 13:00–15:00 is biological. A crash at other times signals something else.',
+    options:['yes, hard','slight dip','no crash'],
+    vals:['hard','slight','none']
+  },
+  {
+    key:'sleep_onset', type:'chips',
+    title:'How long did it take you to fall asleep last night?',
+    sub:'Sleep onset over 20 minutes signals cortisol or magnesium issues.',
+    options:['under 10 min','10–20 min','20–45 min','over 45 min'],
+    vals:['fast','normal','slow','very slow']
+  }
 ];
 
-/* Interaction rules. type: "caution" (space apart) or "synergy" (pair up). */
-const RULES=[
-  {pair:["zinc","magnesium"],type:"caution",text:"<b>Zinc and magnesium compete for absorption.</b> Space them ~2 hours apart, or move zinc to the morning."},
-  {pair:["iron","calcium"],type:"caution",text:"<b>Calcium blunts iron absorption.</b> Keep iron and calcium at least 2 hours apart."},
-  {pair:["iron","zinc"],type:"caution",text:"<b>Iron and zinc compete at high doses.</b> Take them in separate windows."},
-  {pair:["iron","vitaminc"],type:"synergy",text:"<b>Vitamin C boosts iron uptake.</b> Taking them together improves absorption of non-heme iron."},
-  {pair:["caffeine","theanine"],type:"synergy",text:"<b>Caffeine + L-theanine pair well.</b> Theanine smooths the edge off caffeine \u2014 a common focus combination."},
-  {pair:["vitamind","vitamink2"],type:"synergy",text:"<b>Vitamin D and K2 work together.</b> Take with fat in the same window for best effect."}
-];
+let currentQuestion = null;
+let currentQAnswer = null;
 
-const STORAGE_KEY="stack.v1";
-const DEFAULT_STACK=["magnesium","ashwagandha","zinc","vitamind","omega3","theanine"];
-
-/* Persistence — wrapped so the app still runs if storage is blocked (e.g. preview sandbox). */
-function loadStack(){
-  try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){const a=JSON.parse(raw);if(Array.isArray(a))return a.filter(k=>KB[k]);}}catch(e){}
-  return [...DEFAULT_STACK];
+function getTodayQuestion(){
+  // Rotate by day of year so it changes daily, never the same two days running
+  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0)) / 86400000);
+  return DAILY_QUESTIONS[doy % DAILY_QUESTIONS.length];
 }
-function saveStack(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(stack));}catch(e){}}
 
-let stack=loadStack();
-let view="today";
-const $=id=>document.getElementById(id);
+window.openCheckin = function(){
+  currentQuestion = getTodayQuestion();
+  currentQAnswer = null;
+  document.getElementById('ci-question-title').textContent = currentQuestion.title;
+  document.getElementById('ci-question-sub').textContent = currentQuestion.sub;
 
-function addItem(k){if(KB[k]&&!stack.includes(k)){stack.push(k);saveStack();renderAll();}}
-function removeItem(k){stack=stack.filter(x=>x!==k);saveStack();renderAll();}
-function toggleItem(k){stack.includes(k)?removeItem(k):addItem(k);}
+  let body = '';
+  if(currentQuestion.type === 'slider'){
+    body = `<div class="slider-wrap" style="margin-top:8px;">
+      <div class="slider-row">
+        <input type="range" min="${currentQuestion.min}" max="${currentQuestion.max}" value="${currentQuestion.default}" step="1"
+          id="ci-slider" oninput="currentQAnswer=this.value;document.getElementById('ci-sv').textContent=this.value">
+        <span class="slider-val" id="ci-sv">${currentQuestion.default}</span>
+      </div>
+      <div class="slider-labels"><span>${currentQuestion.labels[0]}</span><span>${currentQuestion.labels[1]}</span></div>
+    </div>`;
+    currentQAnswer = String(currentQuestion.default);
+  } else {
+    body = `<div class="chip-group" style="margin-top:8px;">
+      ${currentQuestion.options.map((opt,i)=>`
+        <div class="chip" data-val="${currentQuestion.vals[i]}"
+          onclick="currentQAnswer='${currentQuestion.vals[i]}';document.querySelectorAll('#ci-chips .chip').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink');">
+          ${opt}
+        </div>`).join('')}
+    </div>`;
+    body = `<div id="ci-chips">${body.trim()}</div>`;
+  }
+  document.getElementById('ci-question-body').innerHTML = body;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('checkin-modal').classList.add('open');
+};
 
-function matchKey(v){
-  v=v.trim().toLowerCase();if(!v)return null;
-  let k=Object.keys(KB).find(k=>k===v||KB[k].name.toLowerCase()===v);
-  if(k)return k;
-  k=Object.keys(KB).find(k=>KB[k].name.toLowerCase().includes(v)||(KB[k].alias||[]).some(a=>a.includes(v)));
-  return k||null;
+window.closeCheckin = function(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('checkin-modal').classList.remove('open');
+};
+
+window.submitCheckin = function(){
+  if(!currentQAnswer) currentQAnswer = currentQuestion.default || currentQuestion.vals?.[0] || '3';
+  const today = new Date().toDateString();
+  const entry = {date:today, key:currentQuestion.key, value:currentQAnswer};
+  if(!checkins.find(c=>c.date===today)){
+    checkins.push(entry);
+    try{localStorage.setItem('arco-checkins',JSON.stringify(checkins));}catch(e){}
+  }
+  // Update profile stress/sleep for arc calculations
+  if(currentQuestion.key==='sleep') profile.sleepQuality = parseInt(currentQAnswer)||3;
+  if(currentQuestion.key==='stress') profile.stress = parseInt(currentQAnswer)||3;
+  closeCheckin();
+  buildDash();
+};
+
+function switchTab(tab,el){
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.remove('active');
+    const svg=n.querySelector('svg');if(svg)svg.setAttribute('stroke','rgba(26,22,18,0.3)');
+  });
+  el.classList.add('active');
+  const svg=el.querySelector('svg');if(svg)svg.setAttribute('stroke','#EDE9E1');
+  if(tab==='today') buildDash();
+  else if(tab==='protocol') showProtocolTab();
+  else if(tab==='progress') showProgressTab();
+  else if(tab==='profile') showProfileTab();
+  else if(tab==='learn'){
+    document.getElementById('dash-body').innerHTML=`
+      <div style="padding:4px 0 16px;">
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">learn</div>
+        <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">coming soon</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">Evidence-based guides on timing, forms, and deficiency — written from the same database that powers your protocol.</div>
+      </div>
+      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
+        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">Why form matters more than dose</div>
+        <div style="font-size:11px;color:var(--muted);">Magnesium oxide vs glycinate. The absorption gap nobody talks about.</div>
+      </div>
+      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
+        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">The underdosing problem</div>
+        <div style="font-size:11px;color:var(--muted);">Most fish oil capsules contain 30% of the research dose. Here's what to look for.</div>
+      </div>
+      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
+        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">Cortisol and your day</div>
+        <div style="font-size:11px;color:var(--muted);">What actually happens in the first 90 minutes after waking.</div>
+      </div>
+      <div style="height:20px;"></div>
+    `;
+  }
 }
-function tryAdd(){const k=matchKey($("input").value);if(k)addItem(k);$("input").value="";}
 
-function dotFor(d){return `<span class="dot ${d.form}" style="--c:${d.c};${d.c2?`--c2:${d.c2};`:""}"></span>`;}
-function adqTag(d){return d.low?`<span class="adq low">\u25B3 Below effective</span>`:`<span class="adq ok">\u2713 Effective dose</span>`;}
+function showProfileTab(){
+  const p = profile;
+  const rows = [
+    ['name', p.name],
+    ['age', p.age],
+    ['diet', p.diet||'—'],
+    ['oily fish', p.fish||'—'],
+    ['alcohol', p.alcohol||'—'],
+    ['trains', p.trainingFreq+' · '+p.trainingTime],
+    ['work type', p.workType||'—'],
+    ['work hours', (p.workStart||9)+':00 – '+(p.workEnd||18)+':00'],
+    ['stress', p.stress+' / 5'],
+    ['sleep quality', p.sleepQuality+' / 5'],
+    ['medications', (p.meds||[]).join(', ')||'none'],
+  ].map(([label,val])=>`
+    <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--sep);">
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">${label}</div>
+      <div style="font-size:13px;color:var(--ink);font-weight:500;">${val}</div>
+    </div>`).join('');
 
-/* ── TODAY ── */
-function renderToday(){
-  const q=$("quick");q.innerHTML="";
-  Object.keys(KB).filter(k=>!stack.includes(k)).slice(0,8).forEach(k=>{
-    const b=document.createElement("button");b.className="chip";b.textContent="+ "+KB[k].name;b.onclick=()=>addItem(k);q.appendChild(b);});
+  document.getElementById('dash-body').innerHTML=`
+    <div style="padding:4px 0 16px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">your profile</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">${p.name||'Cons'}</div>
+    </div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:4px 18px;margin-bottom:16px;">${rows}</div>
+    <button onclick="localStorage.clear();location.reload();"
+      style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--muted);font-size:13px;font-family:var(--font);cursor:pointer;margin-bottom:20px;">
+      reset and restart onboarding
+    </button>
+  `;
+}
 
-  const s=$("schedule");s.innerHTML="";
-  if(!stack.length){
-    s.innerHTML=`<div class="empty">Your day is empty.<br><b>Add what you take above</b> and it sorts into the right time windows.</div>`;
-  }else{
-    WIN.forEach(w=>{
-      const items=stack.filter(k=>KB[k].win===w.id);if(!items.length)return;
-      const block=document.createElement("div");block.className="block";
-      block.innerHTML=`<div class="bhead"><span class="btime">${w.time}</span><span class="blabel${w.sig?" sig":""}">${w.label}</span><span class="bdesc">${w.desc}</span></div>`;
-      items.forEach(k=>{const d=KB[k];const r=document.createElement("div");r.className="row";r.tabIndex=0;
-        r.innerHTML=`${dotFor(d)}<div class="rmain">
-          <div class="rtop"><span class="nm">${d.name}</span>${d.micro?`<span class="micro">${d.micro}</span>`:""}</div>
-          <div class="rmeta"><span class="dose">${d.dose}</span>${adqTag(d)}</div>
-        </div><button class="x" aria-label="Remove ${d.name}">&times;</button>`;
-        r.onclick=()=>openDetail(k);
-        r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDetail(k);}};
-        r.querySelector(".x").onclick=e=>{e.stopPropagation();removeItem(k);};
-        block.appendChild(r);});
-      s.appendChild(block);
+function buildWeekRow(){
+  const today=new Date();
+  const todayStr=today.toDateString();
+  const dates=new Set(checkins.map(c=>c.date));
+  const dayNames=['M','T','W','T','F','S','S'];
+  // Find Monday of current week
+  const monday=new Date(today);
+  const dayOfWeek=today.getDay(); // 0=Sun, 1=Mon...
+  const daysFromMonday=(dayOfWeek+6)%7; // Mon=0, Tue=1...Sun=6
+  monday.setDate(today.getDate()-daysFromMonday);
+  let html='<div class="week-row">';
+  for(let i=0;i<7;i++){
+    const d=new Date(monday);
+    d.setDate(monday.getDate()+i);
+    const ds=d.toDateString();
+    const isToday=ds===todayStr;
+    const done=dates.has(ds);
+    const isFuture=d>today&&!isToday;
+    const ch=dayNames[i];
+    let cls='week-dot empty',inner='';
+    if(isToday&&done){cls='week-dot wtoday';inner=`<span style="font-size:11px;color:#fff;font-weight:600;">${ch}</span>`;}
+    else if(isToday){cls='week-dot wtoday';inner=`<span style="font-size:11px;color:#fff;font-weight:500;">${ch}</span>`;}
+    else if(done){cls='week-dot done';inner=`<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="#EDE9E1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+    else if(isFuture){cls='week-dot empty';inner='';}
+    html+=`<div class="week-day"><div class="${cls}">${inner}</div><div class="week-dot-label${isToday?' wtoday':''}" style="${isFuture?'opacity:0.3;':''}">${ch}</div></div>`;
+  }
+  return html+'</div>';
+}
+
+// ── SUPPLEMENT DATABASE (evidence-based, sourced from Examine.com + PubMed) ──
+const SUPPLEMENT_DB = {"version": "1.0", "last_updated": "2026-07-28", "supplements": {"vitd": {"id": "vitd", "name": "Vitamin D3", "alt_names": ["Cholecalciferol", "Vitamin D"], "evidence_grade": "STRONG", "evidence_note": "Strong for deficiency correction/bone. Moderate for mood. Ghaemi et al. 2024, Psychological Medicine, 31 RCTs/24,189 participants.", "best_form": "D3 (cholecalciferol)", "form_note": "D3 > D2 at raising and sustaining serum 25(OH)D. Fat-soluble — absorption increases with dietary fat.", "research_effective_dose": "1000-2000 IU/day maintenance. 4000 IU/day for deficiency correction. Most bottles sell 400 IU — 25% of a maintenance dose.", "elemental_dose": "1000-4000 IU", "timing_window": [7, 13], "timing_reason": "Take with fattiest meal of the day. Fat-soluble — micellar absorption requires dietary fat. No circadian requirement but morning/lunch preferred to avoid theoretical sleep interference at high doses.", "deficiency_risk_factors": ["Living above 51°N latitude — zero cutaneous synthesis October–April regardless of sun exposure", "Indoor lifestyle, office work", "Dark skin (requires 3-5x more sun exposure for equivalent synthesis)", "Obesity (sequestration in adipose tissue)", "Age over 60 (reduced 7-dehydrocholesterol conversion)", "Sunscreen use, full-body clothing"], "deficiency_symptoms": ["Bone pain and tenderness", "Proximal muscle weakness", "Frequent respiratory infections", "Low mood in winter", "Elevated PTH (secondary hyperparathyroidism)"], "contraindications": ["Hypercalcemia", "Sarcoidosis or other granulomatous disease", "Primary hyperparathyroidism", "Thiazide diuretics (both raise serum calcium)"], "upper_limit": "4000 IU/day unsupervised", "synergies": ["k2", "magnesium"], "synergy_notes": {"k2": "D3 increases calcium absorption. K2 (MK-7) directs calcium to bone, not arteries.", "magnesium": "Magnesium is an obligate cofactor for enzymes activating vitamin D. Low magnesium blunts D3 response."}, "uk_legal_claims": ["Vitamin D contributes to the maintenance of normal bones", "Vitamin D contributes to normal muscle function", "Vitamin D contributes to the normal function of the immune system", "Vitamin D contributes to normal blood calcium levels"], "primary_sources": [{"authors": "Ghaemi et al.", "year": 2024, "journal": "Psychological Medicine", "n": 24189, "dose": "Per 1000 IU/day", "result": "SMD −0.32 per 1000 IU/day for depression symptoms"}, {"authors": "Webb, Kline & Holick", "year": 1988, "journal": "J Clin Endocrinol Metab", "result": "Zero cutaneous D3 synthesis at latitudes above 51°N for several months per year"}], "examine_url": "https://examine.com/supplements/vitamin-d/"}, "magnesium": {"id": "magnesium", "name": "Magnesium glycinate", "alt_names": ["Magnesium bisglycinate", "Magnesium"], "evidence_grade": "MODERATE", "evidence_note": "Moabedi et al. 2023, Frontiers in Psychiatry, 7 RCTs/325 participants, SMD −0.919 for depression. Sleep evidence rated mixed by Examine.com.", "best_form": "Glycinate / bisglycinate", "form_note": "Glycinate ~80% absorption vs oxide ~4%. Oxide is the most commonly sold form and the worst for repletion. Glycinate also provides glycine — an inhibitory neurotransmitter with independent calming effects.", "research_effective_dose": "200–400 mg elemental/day. RDA for adult men ~400–420 mg/day. Most glycinate capsules contain 100–200 mg elemental — check the elemental figure, not the total capsule weight.", "elemental_dose": "200-400 mg elemental", "timing_window": [20, 23], "timing_reason": "Evening — taken 60–90 minutes before sleep. Magnesium is an NMDA antagonist and positive modulator of GABA-A receptors which become more sensitive as cortisol declines. Note: the precise GABA-A timing mechanism is mechanistically plausible but not established by rigorous human timing RCTs.", "deficiency_risk_factors": ["Training athletes — sweat losses estimated 2.5–3 mg per session", "High alcohol intake (renal magnesium wasting)", "Chronic PPI use — FDA warns of hypomagnesemia with ≥1 year use", "Loop or thiazide diuretics", "Type 2 diabetes or insulin resistance (urinary loss)", "Diets high in processed food, low in leafy greens, nuts, legumes"], "deficiency_symptoms": ["Muscle fasciculations and twitching", "Nocturnal leg cramps", "3am wake-ups and difficulty falling asleep", "Heart palpitations and premature beats", "Anxiety and irritability without clear cause", "Headaches and migraine"], "contraindications": ["Renal impairment — reduced excretion causes hypermagnesemia risk", "Heart block", "Separate from tetracyclines and fluoroquinolone antibiotics by 2+ hours"], "upper_limit": "No established UL for food-bound magnesium. High supplemental doses cause osmotic diarrhoea.", "synergies": ["vitd", "b6"], "synergy_notes": {"vitd": "Magnesium is a cofactor for vitamin D activation", "b6": "Vitamin B6 may enhance intracellular magnesium uptake"}, "uk_legal_claims": ["Magnesium contributes to a reduction of tiredness and fatigue", "Magnesium contributes to normal muscle function", "Magnesium contributes to normal psychological function", "Magnesium contributes to electrolyte balance", "Magnesium contributes to normal energy-yielding metabolism"], "primary_sources": [{"authors": "Moabedi et al.", "year": 2023, "journal": "Frontiers in Psychiatry", "n": 325, "dose": "200-400 mg elemental/day", "result": "SMD −0.919 (95% CI −1.443 to −0.396, p=0.001) for depression"}], "examine_url": "https://examine.com/supplements/magnesium/"}, "omega3": {"id": "omega3", "name": "Omega-3 (EPA+DHA)", "alt_names": ["Fish oil", "EPA", "DHA", "Omega 3"], "evidence_grade": "STRONG", "evidence_note": "Strong for triglyceride lowering and CV events in high-risk patients (REDUCE-IT). Moderate for depression with EPA-predominant formulations. Liao et al. 2019, Translational Psychiatry, 26 studies/2,160 participants.", "best_form": "High-EPA concentrate (≥60% EPA of total omega-3)", "form_note": "For mood: EPA carries the effect, not DHA. Most standard fish oil capsules contain only ~300 mg combined EPA+DHA per 1,000 mg capsule — users taking one capsule get ~30% of a trial dose. Always read the EPA and DHA figures separately, not the total capsule weight.", "research_effective_dose": "1–2 g/day EPA for mood (EPA-predominant product). 4 g/day purified EPA for CV events (REDUCE-IT, prescription only). Most retail products severely underdose.", "elemental_dose": "1000-2000 mg EPA", "timing_window": [7, 14], "timing_reason": "With a fat-containing meal for maximum absorption of these lipophilic fatty acids. Split dosing reduces GI side effects. No strong circadian rationale.", "deficiency_risk_factors": ["No or low oily fish intake — less than 2 portions per week", "Vegan or vegetarian diet — ALA to EPA conversion is less than 10%", "Diet high in omega-6 (vegetable oils) — competitive desaturase pathway reduces conversion"], "deficiency_symptoms": ["Low omega-3 index is largely asymptomatic short-term", "Dry skin", "Associated with poorer mood stability in some studies"], "contraindications": ["Anticoagulants or antiplatelets at high doses — bleeding risk", "REDUCE-IT showed increased atrial fibrillation at 4 g/day — flag for high-dose use", "Before surgery — discuss with clinician"], "upper_limit": "3 g/day EPA+DHA generally considered safe. Above this, discuss with clinician.", "synergies": ["vitd"], "synergy_notes": {"vitd": "Often combined. Both fat-soluble — take with same meal."}, "uk_legal_claims": ["DHA and EPA contribute to the normal function of the heart (250 mg/day EPA+DHA)", "DHA contributes to maintenance of normal brain function (250 mg DHA)", "EPA+DHA at 3 g/day may contribute to normal blood triglyceride levels"], "primary_sources": [{"authors": "Bhatt et al. (REDUCE-IT)", "year": 2019, "journal": "New England Journal of Medicine", "n": 8179, "dose": "4 g/day purified EPA", "result": "25% reduction in primary composite MACE (HR 0.75, 95% CI 0.68–0.83)"}, {"authors": "Liao et al.", "year": 2019, "journal": "Translational Psychiatry", "n": 2160, "dose": "≤1 g/day EPA (EPA-predominant)", "result": "SMD −0.50 for EPA-predominant formulations vs placebo for depression"}], "examine_url": "https://examine.com/supplements/fish-oil/"}, "zinc": {"id": "zinc", "name": "Zinc bisglycinate", "alt_names": ["Zinc picolinate", "Zinc"], "evidence_grade": "MODERATE", "evidence_note": "Strong for deficiency and immune function. Moderate for testosterone — effect largely confined to previously deficient men. Gandia et al. 2007, Int J Vitam Nutr Res.", "best_form": "Bisglycinate or picolinate", "form_note": "Bisglycinate showed 43.4% higher oral bioavailability than gluconate (Gandia et al. 2007). Picolinate showed superior tissue incorporation vs citrate and gluconate (Barrie et al. 1987). Oxide is the most commonly sold, most poorly absorbed form.", "research_effective_dose": "15–30 mg elemental/day. Barrie et al. used 50 mg/day picolinate. Always pair with ~1–2 mg copper if supplementing long-term to prevent induced copper deficiency.", "elemental_dose": "15-30 mg elemental", "timing_window": [18, 22], "timing_reason": "On empty stomach or between meals for maximal absorption. Separate from coffee, calcium, iron, and phytate-rich meals — phytate is the major absorption antagonist. Evening timing avoids conflicts with morning coffee and breakfast grains.", "deficiency_risk_factors": ["Vegetarian or vegan — phytate in grains and legumes chelates zinc. Requirements are ~50% higher", "Endurance athletes — sweat and urinary losses", "High alcohol intake", "Malabsorption conditions — IBD, coeliac disease, post-GI surgery", "Adults over 60"], "deficiency_symptoms": ["Loss or blunting of taste and smell (hypogeusia/anosmia) — one of the earliest specific signs", "Delayed wound healing", "Frequent infections and colds", "Skin lesions around mouth and extremities", "Hair thinning", "Reduced libido and impaired sperm quality in men"], "contraindications": ["Upper limit 40 mg/day (FDA) / 25 mg/day (EFSA) elemental zinc", "Chronic excess causes copper deficiency — anaemia, neutropenia, neuropathy", "Interferes with tetracycline and fluoroquinolone antibiotics — separate by 2+ hours", "Interferes with penicillamine"], "upper_limit": "25 mg/day (EFSA) / 40 mg/day (FDA)", "synergies": ["copper"], "synergy_notes": {"copper": "Always co-supplement ~1 mg copper per 15 mg zinc during prolonged higher-dose zinc use to prevent induced copper deficiency"}, "uk_legal_claims": ["Zinc contributes to normal fertility and reproduction", "Zinc contributes to the maintenance of normal testosterone levels in the blood", "Zinc contributes to normal cognitive function", "Zinc contributes to the normal function of the immune system", "Zinc contributes to the protection of cells from oxidative stress"], "primary_sources": [{"authors": "Gandia et al.", "year": 2007, "journal": "Int J Vitam Nutr Res", "n": 12, "dose": "Crossover comparison", "result": "Bisglycinate 43.4% higher bioavailability than gluconate"}, {"authors": "Barrie et al.", "year": 1987, "journal": "Agents Actions", "n": 15, "dose": "50 mg/day elemental", "result": "Only picolinate significantly raised hair, urine and erythrocyte zinc (p<0.005)"}], "examine_url": "https://examine.com/supplements/zinc/"}, "creatine": {"id": "creatine", "name": "Creatine monohydrate", "alt_names": ["Creatine"], "evidence_grade": "STRONG", "evidence_note": "One of the most studied supplements. Consistent meta-analytic support for strength and lean mass. ISSN position stand. Forbes et al. 2021, meta-analysis in older adults.", "best_form": "Monohydrate", "form_note": "Monohydrate is the reference standard. Buffered, HCl, and other forms command a price premium without demonstrated superiority in human trials. Use monohydrate.", "research_effective_dose": "3–5 g/day maintenance. Optional loading: 20 g/day (0.3 g/kg) split over 5–7 days then 3–5 g/day maintenance. Loading saturates muscle ~30% faster but is not required. EFSA-authorised claim is at 3 g/day.", "elemental_dose": "3-5 g/day", "timing_window": [6, 23], "timing_reason": "Timing is largely irrelevant. Total daily intake and consistency over weeks drive intramuscular saturation. Some evidence favours post-workout with carbohydrate for marginally improved uptake. Establish a consistent daily habit — that matters more than timing.", "deficiency_risk_factors": ["Vegetarian or vegan — dietary creatine comes from meat and fish. Vegans have ~20-30% lower baseline muscle creatine and show the largest supplementation response", "Older adults — endogenous synthesis declines with age"], "deficiency_symptoms": ["Not an essential nutrient — no classic deficiency syndrome", "Lower baseline means larger response to supplementation"], "contraindications": ["Pre-existing renal disease — medical clearance required. Creatinine rises artefactually and true risk in impaired kidneys is under-studied", "Mild water retention and GI upset during loading phase"], "upper_limit": "No established UL. Very good safety profile in healthy individuals.", "synergies": ["carbohydrate"], "synergy_notes": {"carbohydrate": "Co-ingestion with carbohydrate is insulin-mediated — marginally improves muscle uptake. Resistance training is the primary effect-multiplier."}, "uk_legal_claims": ["Creatine increases physical performance in successive bursts of short-term high-intensity exercise (3 g/day)"], "primary_sources": [{"authors": "Forbes et al.", "year": 2021, "journal": "Meta-analysis (PMC8229907)", "n": null, "dose": "3-5 g/day", "result": "Creatine + resistance training augments lean mass and strength vs placebo in older adults"}, {"authors": "Gordji-Nejad et al.", "year": 2024, "journal": "Scientific Reports", "n": null, "dose": "0.35 g/kg single dose", "result": "Improved cognition during sleep deprivation. Note: cognitive benefit is dose-heavy and context-specific — EFSA rejected a general cognitive claim in 2024."}], "examine_url": "https://examine.com/supplements/creatine/"}, "ashwagandha": {"id": "ashwagandha", "name": "Ashwagandha (KSM-66)", "alt_names": ["Withania somnifera", "KSM-66", "Sensoril"], "evidence_grade": "MODERATE", "evidence_note": "Chandrasekhar et al. 2012, 64 adults, KSM-66 600 mg/day, cortisol reduced ~27.9%. Flag: much evidence is sponsor-funded using proprietary extracts. Long-term safety data limited. Rare hepatotoxicity signals exist.", "best_form": "KSM-66 (root-only, ≥5% withanolides) 300–600 mg/day", "form_note": "KSM-66 is the most-studied. Sensoril (root+leaf, ~10% withanolides) is more sedating at 125–250 mg/day. Generic non-standardised root powder is not interchangeable — unpredictable withanolide content. '600 mg of ashwagandha' is meaningless without the extract specification.", "research_effective_dose": "KSM-66 600 mg/day. Withanolide dose is ~30 mg at 600 mg of 5% KSM-66. Effect accumulates over 4–8 weeks.", "elemental_dose": "300-600 mg KSM-66", "timing_window": [20, 23], "timing_reason": "Daily consistency over 4–8 weeks matters more than time of day — withanolides accumulate in tissue. Take with food (fat-soluble withanolides). Evening placement is common for its mildly sedating profile, particularly for Sensoril.", "deficiency_risk_factors": ["Not a nutrient — adaptogen. Indicated for stress, anxiety, and cortisol dysregulation", "Particularly relevant for high-stress, high-training individuals"], "deficiency_symptoms": ["Not applicable — not a nutrient deficiency", "Target use: elevated perceived stress, high cortisol, anxiety, impaired sleep quality"], "contraindications": ["Autoimmune disease — lupus, RA, MS (immunostimulatory — may exacerbate)", "Thyroid disorders or thyroid medication — can raise thyroid hormones", "Pregnancy — traditional abortifacient", "Sedatives or benzodiazepines — additive sedation", "Doses above 1,250 mg/day associated with GI irritation", "Rare drug-induced liver injury reports — stop if any liver symptoms", "Before surgery"], "upper_limit": "Doses above 1,250 mg/day associated with adverse effects. Long-term safety beyond 6 months not established.", "synergies": [], "synergy_notes": {}, "uk_legal_claims": ["Ashwagandha sits on the EFSA on-hold botanicals list — no authorised health claims", "Marketing stress, anxiety, or cortisol claims is high legal risk under UK MHRA/ASA rules", "Only generic 'traditional use' framing may be permissible"], "primary_sources": [{"authors": "Chandrasekhar, Kapoor & Anishetty", "year": 2012, "journal": "Indian J Psychol Med (PMID 23439798)", "n": 64, "dose": "KSM-66 300 mg twice daily", "result": "Serum cortisol reduced ~27.9%, significant PSS reduction vs placebo at 60 days"}, {"authors": "Salve et al.", "year": 2019, "journal": "Cureus 11(12):e6466", "n": null, "dose": "KSM-66 250 mg and 600 mg/day", "result": "Dose-dependent reductions in stress, anxiety and cortisol. 600 mg more efficacious."}], "examine_url": "https://examine.com/supplements/ashwagandha/"}, "b12": {"id": "b12", "name": "Vitamin B12", "alt_names": ["Methylcobalamin", "Cyanocobalamin", "Cobalamin"], "evidence_grade": "STRONG", "evidence_note": "Strong for treating and preventing deficiency. Methyl vs cyano superiority claim is weak — largely marketing. Metformin deficiency study: PLoS One 2018, 412 patients, OR 4.72.", "best_form": "Either methylcobalamin or cyanocobalamin for most people", "form_note": "Clinically equivalent repletion in most people. Prefer methylcobalamin (or hydroxocobalamin) for: kidney disease, smokers (avoid the cyanide moiety), rare cblC defect. Methylcobalamin shows modestly higher tissue retention. '3x tissue retention' and MTHFR-based superiority claims are overstated.", "research_effective_dose": "1,000 µg (1 mg)/day oral for deficiency correction. Passive diffusion absorbs ~1% of large oral doses, bypassing intrinsic-factor limits. 250 µg/day for maintenance in non-deficient adults.", "elemental_dose": "500-1000 mcg", "timing_window": [6, 12], "timing_reason": "No meaningful circadian dependence. Morning placement is conventional and avoids theoretical energising effects interfering with sleep at high doses. Absorption is capped ~1.5–2.5 µg per physiological dose via intrinsic factor — large doses rely on passive diffusion.", "deficiency_risk_factors": ["Vegan or vegetarian — B12 is essentially only found in animal foods. Mandatory for vegans", "Long-term metformin use — OR 4.72 vs non-users, risk rising at >2,000 mg/day or >4 years", "Chronic PPI or H2-blocker use — reduced acid impairs food-B12 release", "Pernicious anaemia or atrophic gastritis", "Adults over 60 — up to ~20% may be deficient", "GI surgery or malabsorption"], "deficiency_symptoms": ["Paresthesia — tingling and numbness in hands and feet", "Glossitis — sore, smooth red tongue", "Megaloblastic anaemia — fatigue, pallor, breathlessness", "Cognitive changes and memory issues", "Balance problems", "Subacute combined degeneration of the spinal cord if prolonged — can become irreversible"], "contraindications": ["Extremely safe, water-soluble, no established upper limit", "Correct both B12 and folate together — correcting one without the other can mask/precipitate issues", "Rare acneiform eruptions at very high doses"], "upper_limit": "No established UL — water-soluble, excess renally excreted.", "synergies": ["folate", "b6"], "synergy_notes": {"folate": "B12 + folate together normalise homocysteine via methylation cycle", "b6": "All three (B12, folate, B6) work together in homocysteine metabolism"}, "uk_legal_claims": ["Vitamin B12 contributes to normal energy-yielding metabolism", "Vitamin B12 contributes to normal functioning of the nervous system", "Vitamin B12 contributes to normal red blood cell formation", "Vitamin B12 contributes to the reduction of tiredness and fatigue", "Vitamin B12 contributes to normal psychological function"], "primary_sources": [{"authors": "PLoS One 2018", "year": 2018, "journal": "PLoS One (id 0204420)", "n": 412, "dose": "Metformin >2,000 mg/day", "result": "OR 4.72 for B12 deficiency vs non-users, dose and duration dependent"}], "examine_url": "https://examine.com/supplements/vitamin-b12/"}, "k2": {"id": "k2", "name": "Vitamin K2 (MK-7)", "alt_names": ["Menaquinone-7", "MK-7", "Vitamin K2"], "evidence_grade": "MODERATE", "evidence_note": "Knapen et al. 2013, 244 postmenopausal women, MK-7 180 µg/day x 3 years, reduced bone mineral loss. Field is heavily sponsor-funded. Large independent RCT for MK-4 fracture reduction was null.", "best_form": "MK-7 for daily supplementation", "form_note": "MK-7 serum half-life is ~3 days vs MK-4's ~6–8 hours. MK-7 works at microgram doses once daily. MK-4 requires milligram doses several times daily. Nutritional MK-7 doses (45–90 µg/day) carboxylate osteocalcin; MK-4 needs >420–1,500 µg/day for the same effect.", "research_effective_dose": "MK-7 90–180 µg/day. MK-4 pharmacological use is 45 mg/day (45,000 µg) — not comparable.", "elemental_dose": "90-180 mcg MK-7", "timing_window": [7, 14], "timing_reason": "With dietary fat — fat-soluble. MK-7's 3-day half-life makes once-daily timing non-critical. Combine with fattiest meal. MK-4 would need divided dosing due to short half-life.", "deficiency_risk_factors": ["Low intake of fermented foods (natto is the richest source) and leafy greens", "Broad-spectrum antibiotic use — reduces gut menaquinone production", "Fat malabsorption conditions", "Warfarin therapy (see contraindications)"], "deficiency_symptoms": ["No overt deficiency syndrome in healthy adults", "Functionally: elevated undercarboxylated osteocalcin — linked to lower bone density", "Elevated dp-ucMGP — linked to arterial calcification"], "contraindications": ["ABSOLUTE: warfarin or any vitamin K antagonist anticoagulant — K2 directly antagonises the drug. Do not combine without physician management", "Otherwise well tolerated"], "upper_limit": "No established UL for MK-7.", "synergies": ["vitd", "calcium"], "synergy_notes": {"vitd": "D3 increases calcium absorption. K2 directs calcium to bone, not arteries. Note: no robust RCT shows D3+K2 outperforms D3 alone — combination is mechanistically rational but not proven.", "calcium": "K2 carboxylates matrix Gla protein which prevents arterial calcification from calcium supplementation"}, "uk_legal_claims": ["Vitamin K contributes to the maintenance of normal bones", "Vitamin K contributes to normal blood clotting"], "primary_sources": [{"authors": "Knapen et al.", "year": 2013, "journal": "Osteoporosis International 24(9):2499", "n": 244, "dose": "MK-7 180 µg/day", "result": "Significantly decreased age-related loss of bone mineral content at lumbar spine and femoral neck over 3 years"}, {"authors": "Geleijnse et al. (Rotterdam Study)", "year": 2004, "journal": "J Nutr 134:3100", "n": 4807, "dose": "Observational — highest menaquinone tertile", "result": "CHD mortality RR 0.43 (0.24–0.77). Note: observational, not RCT."}], "examine_url": "https://examine.com/supplements/vitamin-k2/"}, "coq10": {"id": "coq10", "name": "CoQ10 (Ubiquinol)", "alt_names": ["Coenzyme Q10", "Ubiquinone", "Ubiquinol"], "evidence_grade": "MODERATE", "evidence_note": "Mortensen et al. 2014, Q-SYMBIO, 420 heart failure patients, CoQ10 300 mg/day, MACE reduced (HR 0.50). Mixed/insufficient for statin myopathy. No EFSA-authorised health claim.", "best_form": "Ubiquinol (reduced form) for adults over 40 or on statins", "form_note": "Ubiquinol shows up to 4.3x higher plasma AUC than ubiquinone in adults over 60. For healthy adults under ~40, the gap is ~20–40%. At 300–600 mg/day the difference narrows. The landmark Q-SYMBIO RCT used ubiquinone — it is not inferior for cardiac endpoints. Oil-based softgel formulation matters more than the ubiquinol/ubiquinone distinction in many cases.", "research_effective_dose": "Q-SYMBIO used 300 mg/day (100 mg three times daily) ubiquinone. Statin myopathy trials used 100–200 mg/day (mixed results). Migraine prevention: 100–300 mg/day. Most retail products sell 30–100 mg once daily — below the cardiac trial dose.", "elemental_dose": "100-300 mg", "timing_window": [7, 20], "timing_reason": "With a fat-containing meal — CoQ10 is large (MW >860 Da) and lipophilic. Oral absorption without fat is only ~2–3%. Split dosing at higher totals improves absorption. Benefits accumulate over 8–12 weeks — not an acute-effect supplement.", "deficiency_risk_factors": ["Statin therapy — statins inhibit HMG-CoA reductase, the shared mevalonate pathway for both cholesterol and CoQ10, causing genuine plasma depletion", "Age over 40 — endogenous synthesis and ubiquinone→ubiquinol conversion decline", "Heart failure — low myocardial CoQ10 correlates with severity"], "deficiency_symptoms": ["No discrete deficiency syndrome in healthy people", "Statin users may report myalgia — though CoQ10 benefit for this is unproven (NICE NG238 does not recommend it)", "In heart failure: severity correlates inversely with myocardial CoQ10 levels"], "contraindications": ["May blunt warfarin's effect — structural similarity to vitamin K. Monitor INR if on anticoagulants", "May modestly lower blood pressure — watch with antihypertensives", "May lower blood glucose — watch with antidiabetics", "Mild GI upset"], "upper_limit": "No established UL. Very safe profile.", "synergies": ["selenium"], "synergy_notes": {"selenium": "KiSel-10 trial (Alehagen) found combined selenium + CoQ10 reduced CV mortality in elderly — combination signal, not CoQ10 alone"}, "uk_legal_claims": ["No EFSA-authorised health claim for CoQ10 or ubiquinol — all claims submitted were rejected", "No health benefit may be stated on-pack in the UK or EU", "Energy, heart, and anti-ageing claims are all non-compliant"], "primary_sources": [{"authors": "Mortensen et al. (Q-SYMBIO)", "year": 2014, "journal": "JACC: Heart Failure 2(6):641", "n": 420, "dose": "300 mg/day (ubiquinone)", "result": "MACE 15% vs 26% placebo (HR 0.50, 95% CI 0.32–0.80, p=0.003); all-cause mortality 10% vs 18% (p=0.018)"}], "examine_url": "https://examine.com/supplements/coenzyme-q10/"}, "magnesium_threonate": {"id": "magnesium_threonate", "name": "Magnesium L-Threonate", "alt_names": ["Magtein", "Mag Threonate"], "evidence_grade": "WEAK", "evidence_note": "Positive signals from small, single-sponsor, industry-funded trials with subjective endpoints. No independent replication. Mechanistic case (raising brain magnesium) largely rodent-derived. Examine.com flags conflicts of interest.", "best_form": "Magtein (proprietary magnesium L-threonate)", "form_note": "The brain-delivery rationale comes from rodent studies — CSF magnesium changes after Magtein have never been directly measured in humans. Provides only ~144–147 mg elemental magnesium per 2 g dose. You pay for the threonate carrier, not the magnesium. For general repletion, sleep, or anxiety, standard glycinate at 200–400 mg elemental is better-evidenced and far cheaper.", "research_effective_dose": "2 g/day of Magtein (delivering only ~144 mg elemental magnesium). Typically split morning + ~2 hours before bed per trial protocols.", "elemental_dose": "2000 mg (144 mg elemental)", "timing_window": [20, 23], "timing_reason": "Per trial protocols: morning dose + evening dose ~2 hours before sleep. Evening aligns with cognitive/sleep hypothesis. Consistency over weeks matters more than precise timing.", "deficiency_risk_factors": ["Same risk factors as general magnesium deficiency — no distinct L-threonate deficiency state", "Marketed for age-related cognitive decline and sleep — not a deficiency supplement"], "deficiency_symptoms": ["Not applicable as a distinct deficiency", "Target: age-related memory decline, subjective cognitive impairment, sleep quality"], "contraindications": ["Renal impairment — as with all magnesium forms", "High cost and weak evidence are the primary practical concerns", "Multi-ingredient trial formulations confound attribution — the isolated threonate effect is unclear"], "upper_limit": "As for magnesium generally.", "synergies": [], "synergy_notes": {}, "uk_legal_claims": ["Only generic magnesium claims apply — same as standard magnesium", "Cognitive or brain-aging marketing claims are not permitted"], "primary_sources": [{"authors": "Liu et al. (MMFS-01 pilot)", "year": 2016, "journal": "Industry-linked pilot", "n": 44, "dose": "1.5–2 g/day", "result": "Improved composite cognitive score in 50–70 year olds with subjective cognitive impairment. Single-sponsor, no independent replication."}], "examine_url": "https://examine.com/supplements/magnesium-threonate/"}}, "deficiency_inference_rules": {"vitd": {"high_risk": [{"condition": "latitude_above_51", "months": [10, 11, 12, 1, 2, 3, 4], "note": "Zero cutaneous synthesis above 51°N October–April"}, {"condition": "indoor_work", "note": "Minimal sun exposure during peak UVB hours"}, {"condition": "dark_skin", "multiplier": "3-5x more sun exposure needed"}], "moderate_risk": [{"condition": "sunscreen_daily"}, {"condition": "athlete", "note": "Additional loss through sweat"}]}, "magnesium": {"high_risk": [{"condition": "training_4_plus_per_week", "note": "Sweat losses 2.5–3 mg per session"}, {"condition": "high_alcohol"}, {"condition": "ppi_use"}], "moderate_risk": [{"condition": "training_2_3_per_week"}, {"condition": "low_leafy_greens"}, {"condition": "high_stress", "note": "Cortisol promotes renal magnesium wasting"}]}, "omega3": {"high_risk": [{"condition": "no_oily_fish", "note": "Less than 2 portions per week"}, {"condition": "vegan_vegetarian", "note": "ALA to EPA conversion <10%"}], "moderate_risk": [{"condition": "high_omega6_diet", "note": "Vegetable oils compete with conversion"}]}, "zinc": {"high_risk": [{"condition": "vegan_vegetarian", "note": "Phytate chelates zinc. Requirements ~50% higher"}, {"condition": "endurance_athlete"}], "moderate_risk": [{"condition": "low_red_meat", "note": "Less than twice per week"}, {"condition": "high_alcohol"}]}, "b12": {"high_risk": [{"condition": "vegan", "note": "Mandatory supplementation"}, {"condition": "vegetarian"}, {"condition": "metformin_use", "note": "OR 4.72 vs non-users"}], "moderate_risk": [{"condition": "ppi_use"}, {"condition": "age_over_60"}]}}, "target_profile": {"description": "20–35 year old active urban male in Northern Europe", "priority_ranking": [{"rank": 1, "supplement": "vitd", "reason": "Above 51°N — zero synthesis October–April. Single highest-yield intervention for this profile."}, {"rank": 2, "supplement": "magnesium", "reason": "Training sweat losses + common dietary gap. Symptoms are common and non-specific."}, {"rank": 3, "supplement": "omega3", "reason": "High probability if not eating oily fish twice weekly. Most people severely underdose."}, {"rank": 4, "supplement": "creatine", "reason": "Not a deficiency but highest-evidence performance add for active males. 3–5 g/day monohydrate."}, {"rank": 5, "supplement": "zinc", "reason": "Moderate risk for active males. Priority increases sharply with vegetarian/vegan diet."}, {"rank": 6, "supplement": "b12", "reason": "Low risk for omnivores. Mandatory for vegans."}]}};
+
+// Flat SUPPLEMENTS lookup for protocol card — keyed by id
+const SUPPLEMENTS = {};
+Object.entries(SUPPLEMENT_DB.supplements).forEach(([key, s]) => {
+  SUPPLEMENTS[key] = {
+    name: s.name,
+    dose: s.elemental_dose,
+    window: s.timing_window,
+    reason: s.timing_reason,
+    evidence: s.evidence_grade,
+    best_form: s.best_form,
+    form_note: s.form_note,
+    symptoms: s.deficiency_symptoms,
+    contraindications: s.contraindications,
+    sources: s.primary_sources,
+    examine_url: s.examine_url,
+    risk_factors: s.deficiency_risk_factors
+  };
+});
+
+// ── SUPPLEMENT TAKEN STATE ──
+const takenToday = JSON.parse(localStorage.getItem('arco-taken-'+new Date().toDateString())||'[]');
+function markTaken(key){
+  if(!takenToday.includes(key)){takenToday.push(key);}
+  else{takenToday.splice(takenToday.indexOf(key),1);}
+  try{localStorage.setItem('arco-taken-'+new Date().toDateString(),JSON.stringify(takenToday));}catch(e){}
+  buildDash();
+}
+
+function buildSupplementCard(h, p) {
+  const sups = p.supplements || [];
+  if (!sups.length) return '';
+
+  const all = sups.map(key => ({key, ...SUPPLEMENTS[key]})).filter(s => s.name);
+  const due = all.filter(s => h >= s.window[0] && h < s.window[1]);
+  const laterToday = all.filter(s => s.window[0] > h).sort((a,b) => a.window[0] - b.window[0]);
+
+  // Build cards for all due supplements
+  let html = '';
+
+  if (due.length) {
+    due.forEach(s => {
+      const taken = takenToday.includes(s.key);
+      if(taken){
+        // Checked state — green, fading
+        html += `<div onclick="markTaken('${s.key}')" style="background:#1a3a1a;border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:10px;color:#4BB87B;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;font-weight:500;">taken</div>
+            <div style="font-size:15px;font-weight:500;color:rgba(75,184,123,0.7);text-decoration:line-through;">${s.name}</div>
+            <div style="font-size:11px;color:rgba(75,184,123,0.4);margin-top:2px;">${s.dose}</div>
+          </div>
+          <div style="width:28px;height:28px;border-radius:50%;background:#4BB87B;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>`;
+      } else {
+        html += `<div onclick="markTaken('${s.key}')" style="background:var(--ink);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;cursor:pointer;active:opacity:0.85;transition:opacity 0.15s;">
+          <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;font-weight:500;">take now</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <div style="font-size:15px;font-weight:500;color:#EDE9E1;">${s.name}</div>
+            <div style="font-size:12px;color:rgba(237,233,225,0.4);">${s.dose}</div>
+          </div>
+          <div style="font-size:12px;color:rgba(237,233,225,0.5);line-height:1.55;">${s.reason}</div>
+          <div style="margin-top:10px;height:1.5px;background:rgba(237,233,225,0.08);border-radius:1px;">
+            <div style="height:100%;width:30px;background:rgba(237,233,225,0.2);border-radius:1px;"></div>
+          </div>
+          <div style="font-size:10px;color:rgba(237,233,225,0.25);margin-top:6px;">tap to mark taken</div>
+        </div>`;
+      }
     });
   }
 
-  const n=$("note");n.innerHTML="";
-  RULES.forEach(rule=>{
-    if(rule.pair.every(k=>stack.includes(k))){
-      const el=document.createElement("div");el.className="note "+rule.type;
-      el.innerHTML=`<span class="mk">${rule.type==="caution"?"Timing":"Pairs"}</span><p>${rule.text}</p>`;n.appendChild(el);}
+  if (!due.length && laterToday.length) {
+    const s = laterToday[0];
+    html += `<div style="background:var(--card);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">supplement · ${fmt(s.window[0])}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:14px;font-weight:500;color:var(--ink);">${s.name}</div>
+        <div style="font-size:12px;color:var(--muted);">${s.dose}</div>
+      </div>
+    </div>`;
+  }
+
+  return html;
+}
+
+function buildProtocolCard(h, p){
+  const sups = p.supplements || [];
+  if(!sups.length) return '';
+  const all = sups.map(key => ({key, ...SUPPLEMENTS[key]})).filter(s => s.name);
+  all.sort((a,b) => a.window[0] - b.window[0]);
+
+  const rows = all.map(s => {
+    const taken = takenToday.includes(s.key);
+    const isDue = h >= s.window[0] && h < s.window[1];
+    const isPast = h >= s.window[1];
+    const rowId = 'sup-row-'+s.key;
+    const detailId = 'sup-detail-'+s.key;
+
+    let timeColor = 'var(--muted)';
+    let nameColor = 'var(--ink)';
+    let rowOpacity = '1';
+    if(isPast && taken){ timeColor='#4BB87B'; nameColor='rgba(26,22,18,0.35)'; rowOpacity='0.65'; }
+    else if(isPast && !taken){ nameColor='rgba(26,22,18,0.3)'; rowOpacity='0.45'; }
+    else if(isDue){ timeColor='var(--orange)'; }
+
+    const checkCircle = `<div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${taken?'#4BB87B':isDue?'rgba(232,82,10,0.08)':'transparent'};border:${taken?'none':isDue?'1.5px solid var(--orange)':'0.5px solid var(--sep)'};" onclick="event.stopPropagation();markTaken('${s.key}')">
+      ${taken?`<svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+    </div>`;
+
+    // Expandable detail panel
+    const detail = `<div id="${detailId}" style="display:none;padding:10px 0 4px;border-top:0.5px solid var(--sep);margin-top:4px;">
+      <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px;">${s.reason}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+        <span style="font-size:10px;color:var(--orange);border:0.5px solid var(--orange);border-radius:4px;padding:2px 6px;letter-spacing:0.04em;">${s.evidence} evidence</span>
+        <span style="font-size:10px;color:var(--muted);border:0.5px solid var(--sep);border-radius:4px;padding:2px 6px;">${s.best_form}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+        <a href="${s.examine_url}" style="color:var(--orange);text-decoration:none;" target="_blank">view evidence on Examine.com →</a>
+      </div>
+    </div>`;
+
+    return `<div id="${rowId}" style="padding:10px 0;border-bottom:0.5px solid var(--sep);opacity:${rowOpacity};transition:opacity 0.2s;">
+      <div style="display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleSupDetail('${detailId}')">
+        <div style="width:42px;flex-shrink:0;text-align:right;">
+          <div style="font-size:11px;font-weight:500;color:${timeColor};letter-spacing:0.02em;">${fmt(s.window[0])}</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:500;color:${nameColor};${taken?'text-decoration:line-through;':''}">${s.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px;">${s.dose}</div>
+        </div>
+        ${checkCircle}
+      </div>
+      ${detail}
+    </div>`;
+  }).join('');
+
+  const totalTaken = sups.filter(k => takenToday.includes(k)).length;
+
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">today's protocol</div>
+      <div style="font-size:10px;color:${totalTaken===sups.length?'#4BB87B':'var(--muted)'};">${totalTaken}/${sups.length} taken</div>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+window.toggleSupDetail = function(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+};
+
+function buildNextWindow(h,p){
+  const windows=getWindows(p);
+  const nextIdx=windows.findIndex(w=>w.start>h);
+  if(nextIdx===-1) return '';
+  const next=windows[nextIdx];
+  return`<div style="background:var(--card);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:3px;">up next · ${fmt(next.start)}</div>
+      <div style="font-size:14px;font-weight:500;color:var(--ink);">${next.activity}</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);">${fmt(next.start)} — ${fmt(next.end)}</div>
+  </div>`;
+}
+
+function showProtocolTab(){
+  const diagnosis = runDiagnosis(profile);
+  const sups = profile.supplements || [];
+
+  const confidenceColors = {HIGH:'#E8520A', MODERATE:'rgba(26,22,18,0.45)', CONTRAINDICATED:'#cc3333'};
+  const evidenceBadge = id => {
+    const s = SUPPLEMENTS[id]; if(!s) return '';
+    const c = s.evidence==='STRONG'?'#4BB87B':s.evidence==='MODERATE'?'rgba(26,22,18,0.35)':'rgba(26,22,18,0.2)';
+    return `<span style="font-size:9px;color:${c};border:0.5px solid ${c};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;font-weight:500;">${s.evidence}</span>`;
+  };
+
+  const cards = diagnosis.filter(d=>!d.contraindicated).map(d => {
+    const s = SUPPLEMENTS[d.id]; if(!s) return '';
+    const taken = takenToday.includes(d.id);
+    const confColor = confidenceColors[d.confidence]||'var(--muted)';
+    const reasons = d.reasons.map(r=>`
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;">
+        <div style="width:3px;height:3px;border-radius:50%;background:var(--muted);flex-shrink:0;margin-top:5px;"></div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.55;">${r}</div>
+      </div>`).join('');
+
+    return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:4px;">${s.name}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${evidenceBadge(d.id)}
+            <span style="font-size:10px;color:${confColor};font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">${d.confidence} risk</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;font-weight:500;color:var(--orange);">${fmt(s.window[0])}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">daily</div>
+        </div>
+      </div>
+      <div style="height:0.5px;background:var(--sep);margin:10px 0;"></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+        <div>
+          <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:3px;">dose</div>
+          <div style="font-size:12px;font-weight:500;color:var(--ink);">${s.dose}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:3px;">form</div>
+          <div style="font-size:12px;font-weight:500;color:var(--ink);">${s.best_form.split('(')[0].trim()}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:3px;">window</div>
+          <div style="font-size:12px;font-weight:500;color:var(--ink);">${fmt(s.window[0])} – ${fmt(s.window[1])}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">${reasons}</div>
+      <div style="font-size:11px;color:rgba(26,22,18,0.4);line-height:1.55;padding:8px 10px;background:rgba(26,22,18,0.04);border-radius:6px;">${s.reason.split('.')[0]}.</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('dash-body').innerHTML=`
+    <div style="padding:4px 0 16px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">your protocol</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">${diagnosis.filter(d=>!d.contraindicated).length} compounds</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;">Each recommendation is tied to your specific inputs. Evidence grades from Examine.com and PubMed.</div>
+    </div>
+    ${cards}
+    <div style="height:20px;"></div>
+  `;
+}
+
+function showProgressTab(){
+  const now=new Date();
+  const totalDays = Math.max(checkins.length, 1);
+  const sups = profile.supplements || [];
+
+  // Adherence — how many days each supplement was taken
+  const weekDates = [];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);weekDates.push(d.toDateString());}
+
+  // Build 7-day adherence grid
+  const adherenceGrid = sups.map(key => {
+    const s = SUPPLEMENTS[key]; if(!s) return '';
+    const taken = takenToday.includes(key);
+    // For demo, simulate some historical data
+    const dots = weekDates.map((date,i) => {
+      const isToday = date === new Date().toDateString();
+      const wasTaken = isToday ? taken : checkins.some(c=>c.date===date) && Math.random()>0.3;
+      const col = wasTaken ? '#4BB87B' : isToday&&!taken ? 'rgba(232,82,10,0.3)' : 'rgba(26,22,18,0.1)';
+      return `<div style="width:28px;height:28px;border-radius:50%;background:${col};flex-shrink:0;"></div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--sep);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);">${s.name}</div>
+        <div style="font-size:10px;color:var(--muted);">${fmt(s.window[0])}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;">${dots}</div>
+    </div>`;
+  }).join('');
+
+  // Streak
+  const streak = Math.max(getStreak(checkins),1);
+  const weekCheckins = checkins.filter(c=>{const d=new Date(c.date),t=new Date();t.setHours(0,0,0,0);return(t-d)/86400000<7;}).length;
+
+  // Check-in history chart — last 7 days as bars
+  const barWidth = 28;
+  const bars = weekDates.map((date,i)=>{
+    const hasCI = checkins.some(c=>c.date===date);
+    const isToday = date===new Date().toDateString();
+    const h = hasCI ? (60 + Math.random()*20) : 10;
+    const col = isToday ? 'var(--orange)' : hasCI ? 'var(--ink)' : 'rgba(26,22,18,0.08)';
+    const days=['M','T','W','T','F','S','S'];
+    const dIdx=(new Date(date).getDay()+6)%7;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <div style="width:${barWidth}px;height:80px;display:flex;align-items:flex-end;">
+        <div style="width:100%;height:${h}px;background:${col};border-radius:4px 4px 0 0;transition:height 0.3s;"></div>
+      </div>
+      <div style="font-size:9px;color:${isToday?'var(--orange)':'var(--muted)'};">${days[dIdx]}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('dash-body').innerHTML=`
+    <div style="padding:4px 0 16px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">progress</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">day ${totalDays}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">consistency compounds. the data gets more useful every week.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
+        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">streak</div>
+        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${streak}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">days</div>
+      </div>
+      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
+        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">this week</div>
+        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${weekCheckins}/7</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">check-ins</div>
+      </div>
+      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
+        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">protocol</div>
+        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${sups.length}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">compounds</div>
+      </div>
+    </div>
+
+    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;">check-in history</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;">${bars}</div>
+    </div>
+
+    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">supplement adherence</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">last 7 days</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+        ${weekDates.map((_,i)=>{const days=['M','T','W','T','F','S','S'];const d=new Date();d.setDate(d.getDate()-(6-i));const dIdx=(d.getDay()+6)%7;const isToday=d.toDateString()===new Date().toDateString();return`<div style="width:28px;text-align:center;font-size:9px;color:${isToday?'var(--orange)':'var(--muted)'};">${days[dIdx]}</div>`;}).join('')}
+      </div>
+      ${adherenceGrid}
+    </div>
+
+    <div style="background:var(--card-peach);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;border-left:3px solid var(--orange);">
+      <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;font-weight:500;">pattern insight</div>
+      <div style="font-size:13px;color:var(--ink);line-height:1.6;">Keep logging daily. After 7 days Arco will identify patterns in your energy, sleep and compliance — and tell you something about yourself you didn't already know.</div>
+    </div>
+
+    <div style="height:20px;"></div>
+  `;
+}
+
+
+function drawCurve(h){
+  const canvas=document.getElementById('main-curve');if(!canvas)return;
+  const w=canvas.width,ch=canvas.height,ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,w,ch);
+  [{key:'cortisol',color:'#E8520A'},{key:'melatonin',color:'#7B8FE8'},{key:'testosterone',color:'#4BB87B'}].forEach(({key,color})=>{
+    ctx.beginPath();
+    for(let i=0;i<=240;i++){
+      const hh=(i/240)*24,v=getHormones(hh,profile,todayMod)[key],x=(hh/24)*w,y=ch-4-v*(ch-8);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
   });
+  const cx=(h/24)*w;
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,ch);
+  ctx.strokeStyle='rgba(26,22,18,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
 }
 
-/* ── STACK / BROWSE ── */
-function renderLibrary(){
-  const term=($("search").value||"").trim().toLowerCase();
-  const lib=$("library");lib.innerHTML="";
-  WIN.forEach(w=>{
-    let keys=Object.keys(KB).filter(k=>KB[k].win===w.id);
-    if(term)keys=keys.filter(k=>KB[k].name.toLowerCase().includes(term)||(KB[k].alias||[]).some(a=>a.includes(term)));
-    if(!keys.length)return;
-    const head=document.createElement("div");head.className="libsec";head.textContent=`${w.label} · ${w.time}`;lib.appendChild(head);
-    keys.forEach(k=>{const d=KB[k];const inStack=stack.includes(k);
-      const row=document.createElement("div");row.className="lib"+(inStack?" in":"");
-      row.innerHTML=`${dotFor(d)}<div class="rmain">
-        <div class="rtop"><span class="nm">${d.name}</span></div>
-        <div class="rmeta"><span class="dose">${d.dose}</span><span class="adq ok">${d.eff}</span></div>
-      </div><button class="toggle" aria-label="${inStack?"Remove":"Add"} ${d.name}">${inStack?"\u2212":"+"}</button>`;
-      row.onclick=()=>toggleItem(k);lib.appendChild(row);});
-  });
-  if(!lib.children.length)lib.innerHTML=`<div class="empty">No match for <b>${term}</b>.</div>`;
+function getInsight(score,p,phase){
+  if(score<50)return'Your arc is dysregulated — prioritise sleep consistency above everything else this week.';
+  if(score<70)return'You\'re building momentum. One more consistent night makes a measurable difference.';
+  if(p.trainingTime==='evening')return'Note: evening training is elevating your cortisol at bedtime. Consider shifting one session earlier this week.';
+  return'Your arc is in a strong position. Protect your current habits — this is where compounding starts.';
 }
 
-/* ── YOU ── */
-function renderYou(){$("stackCount").textContent=stack.length;}
+window.openCheckin=function(){document.getElementById('modal-overlay').classList.add('open');document.getElementById('checkin-modal').classList.add('open');};
+window.closeCheckin=function(){document.getElementById('modal-overlay').classList.remove('open');document.getElementById('checkin-modal').classList.remove('open');};
+window.submitCheckin=function(){
+  const mood=document.querySelector('#ci-mood .sel-orange')?.dataset.val||'okay';
+  const sleep=parseInt(document.getElementById('ci-sleep').value)||3;
+  const train=document.querySelector('#ci-train .sel-orange')?.dataset.val||'no';
+  const stress=parseInt(document.getElementById('ci-stress').value)||2;
+  const mMap={great:.12,good:.07,okay:0,tired:-.10,drained:-.18};
+  const m=mMap[mood]||0,sq=(sleep-3)*0.06,st=(stress-3)*-0.05;
+  todayMod={cortisol:Math.max(-.3,Math.min(.3,m+sq+st)),melatonin:Math.max(-.2,Math.min(.2,-m*0.3)),testosterone:Math.max(-.2,Math.min(.3,m*0.5+sq*0.8+(train==='yes'?.08:0))),trained:train==='yes'};
+  profile.sleepQuality=sleep;profile.stress=stress;
+  localStorage.setItem('arco-profile',JSON.stringify(profile));
+  const today=new Date().toDateString();
+  if(!checkins.find(c=>c.date===today)){checkins.push({date:today,mood,sleep,train,stress});localStorage.setItem('arco-checkins',JSON.stringify(checkins));}
+  closeCheckin();buildDash();
+};
 
-function renderAll(){renderToday();if(view==="stack")renderLibrary();renderYou();}
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 
-function setView(v){
-  view=v;
-  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("active",s.id==="view-"+v));
-  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  document.querySelector(".scroll").scrollTop=0;
-  if(v==="stack")renderLibrary();if(v==="you")renderYou();
+// ── INIT ──
+// First run → onboarding → diagnosis → dashboard
+// Returning user → dashboard directly
+// Demo shortcut: preset Cons profile then show diagnosis
+const savedProfile = JSON.parse(localStorage.getItem('arco-profile')||'null');
+if(savedProfile && savedProfile.supplements && savedProfile.supplements.length){
+  // Returning user with a complete profile — go straight to dashboard
+  if(!savedProfile.name||savedProfile.name==='you') savedProfile.name='Cons';
+  profile = savedProfile;
+  try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
+  showDash();
+} else {
+  // No profile or incomplete — use Cons demo profile and show diagnosis
+  profile = {
+    name:'Cons', age:24, sex:'male',
+    wake:7, bed:23, sleepQuality:3, chronotype:'neutral',
+    trainingFreq:'3-4', trainingTime:'evening', stress:4,
+    workType:'banking', workStart:8, workEnd:21, flexibility:'none',
+    diet:'low_meat', fish:'never', alcohol:'low', meds:[],
+    caffeine:'morning', goal:'performance', sunlight:'rarely'
+  };
+  try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
+  showDiagnosis();
 }
-
-/* ── Detail sheet ── */
-let lastFocus=null;
-function openSheet(html){lastFocus=document.activeElement;$("sheet").innerHTML='<div class="handle"></div>'+html;$("overlay").classList.add("open");$("overlay").setAttribute("aria-hidden","false");$("sheet").scrollTop=0;$("sheet").focus();}
-function closeSheet(){$("overlay").classList.remove("open");$("overlay").setAttribute("aria-hidden","true");if(lastFocus&&lastFocus.focus)lastFocus.focus();}
-function openDetail(k){
-  const d=KB[k];
-  const verdict=d.low?`<div class="verdict low"><span class="vg">\u25B3</span>Below effective range</div>`:`<div class="verdict ok"><span class="vg">\u2713</span>Effective dose</div>`;
-  const explain=d.low?`<div class="sh-label">Why</div><p class="sh-body">${d.lownote}</p>`:"";
-  const w=WIN.find(x=>x.id===d.win);const micro=d.micro?` · ${d.micro}`:"";
-  openSheet(`
-    <div class="sh-head">${dotFor(d)}<div><div class="sh-name">${d.name}</div><div class="sh-dose">Your dose: ${d.dose}</div></div></div>
-    ${verdict}
-    <div class="sh-label">Effective range</div><p class="sh-body">${d.eff}</p>
-    ${explain}
-    <div class="sh-label">When</div><p class="sh-body">${w.time} · ${w.label}${micro}</p>
-    <button class="btn-out danger" id="rm" style="width:100%;margin-top:24px">Remove from stack</button>
-  `);
-  $("rm").onclick=()=>{removeItem(k);closeSheet();};
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')
+    .then(r => console.log('SW registered'))
+    .catch(e => console.log('SW failed', e)));
 }
-
-/* Wiring */
-$("scrim").onclick=closeSheet;
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("overlay").classList.contains("open"))closeSheet();});
-$("addBtn").onclick=tryAdd;
-$("input").addEventListener("keydown",e=>{if(e.key==="Enter")tryAdd();});
-$("search").addEventListener("input",renderLibrary);
-$("avBtn").onclick=()=>setView("you");
-$("clearBtn").onclick=()=>{stack=[];saveStack();renderAll();setView("today");};
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
-
-renderAll();
 </script>
 </body>
 </html>
