@@ -210,17 +210,23 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 /* BOTTOM NAV */
 .bottom-nav{
   position:fixed;
-  bottom:0;
-  left:0;
-  right:0;
+  bottom:calc(14px + env(safe-area-inset-bottom));
+  left:50%;
+  transform:translateX(-50%);
+  width:calc(100% - 32px);
+  max-width:358px;
   z-index:100;
-  background:var(--bg);
-  padding:8px 16px calc(20px + env(safe-area-inset-bottom));
+  background:rgba(230,225,216,0.72);
+  -webkit-backdrop-filter:blur(18px) saturate(1.1);
+  backdrop-filter:blur(18px) saturate(1.1);
+  padding:7px 8px;
   display:flex;
   justify-content:space-between;
   align-items:center;
-  flex-shrink:0;
-  border-top:0.5px solid var(--sep);
+  gap:2px;
+  border-radius:40px;
+  border:0.5px solid rgba(26,22,18,0.06);
+  box-shadow:0 8px 30px rgba(26,22,18,0.14);
 }
 .nav-item{
   display:flex;
@@ -233,7 +239,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   min-width:56px;
   transition:background 0.15s;
 }
-.nav-item.active{background:var(--ink);}
+.nav-item.active{background:var(--ink);border-radius:26px;padding:9px 18px;}
 .nav-item-label{font-size:9px;letter-spacing:0.05em;text-transform:uppercase;font-weight:500;}
 .nav-item.active .nav-item-label{color:#EDE9E1;}
 .nav-item:not(.active) .nav-item-label{color:var(--muted);}
@@ -1469,21 +1475,33 @@ function drawClock(h){
   // Inner face
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
 
-  // Sunrise / sunset ticks across the ring, with the times in small type just outside.
+  // Sunrise / sunset ticks across the ring, with the times in small type just outside
+  // and a tiny sunrise/sunset glyph beyond each.
   if(hasSun){
     const ang=hh=>(hh/24)*Math.PI*2 - Math.PI/2;
-    [SR,SS].forEach(hh=>{
-      const a=ang(hh);
+    [SR,SS].forEach((hh,idx)=>{
+      const rising = idx===0;               // SR first (sun up), SS second (sun down)
+      const a=ang(hh), ca=Math.cos(a), sa=Math.sin(a);
       const rIn=r-SW/2-2*dpr, rOut=r+SW/2+2*dpr;
       ctx.beginPath();
-      ctx.moveTo(cx+Math.cos(a)*rIn, cy+Math.sin(a)*rIn);
-      ctx.lineTo(cx+Math.cos(a)*rOut, cy+Math.sin(a)*rOut);
+      ctx.moveTo(cx+ca*rIn, cy+sa*rIn);ctx.lineTo(cx+ca*rOut, cy+sa*rOut);
       ctx.strokeStyle='rgba(237,233,225,0.9)';ctx.lineWidth=1.5*dpr;ctx.stroke();
+      // time
       const tR=r+SW/2 + 11*dpr;
       ctx.font=`600 ${8.5*dpr}px Switzer,sans-serif`;
-      ctx.fillStyle='rgba(26,22,18,0.5)';
+      ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(fmt(hh), cx+Math.cos(a)*tR, cy+Math.sin(a)*tR);
+      ctx.fillText(fmt(hh), cx+ca*tR, cy+sa*tR);
+      // tiny sun-on-horizon glyph, arrow up for sunrise, down for sunset
+      const iR=r+SW/2 + 25*dpr, ix=cx+ca*iR, iy=cy+sa*iR, s=3.2*dpr, hy=iy+s*0.55;
+      ctx.strokeStyle='rgba(26,22,18,0.5)';ctx.lineWidth=1*dpr;ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.beginPath();ctx.moveTo(ix-s*1.4, hy);ctx.lineTo(ix+s*1.4, hy);ctx.stroke();     // horizon
+      ctx.beginPath();ctx.arc(ix, hy, s*0.75, Math.PI, 2*Math.PI);ctx.stroke();            // sun dome
+      const ay=iy-s*0.8;
+      ctx.beginPath();
+      if(rising){ ctx.moveTo(ix-1.8*dpr, ay); ctx.lineTo(ix, ay-2.3*dpr); ctx.lineTo(ix+1.8*dpr, ay); }
+      else { ctx.moveTo(ix-1.8*dpr, ay-2.3*dpr); ctx.lineTo(ix, ay); ctx.lineTo(ix+1.8*dpr, ay-2.3*dpr); }
+      ctx.stroke();
     });
   }
 
@@ -1520,8 +1538,9 @@ function drawClock(h){
     const ma2 = (supH / 24) * Math.PI * 2 - Math.PI / 2;
 
     const ringEdge = r + SW/2;
-    // Push a marker outward if it sits near a sunrise/sunset label, so the two never collide.
-    const bump = (hasSun && Math.min(angDistH(supH,SR),angDistH(supH,SS)) < 0.7) ? 16*dpr : 0;
+    // Push a marker outward if it sits near a sunrise/sunset label+icon, so a dot is
+    // never placed next to a sun time. Generous window (~1h) clears the icon too.
+    const bump = (hasSun && Math.min(angDistH(supH,SR),angDistH(supH,SS)) < 1.0) ? 20*dpr : 0;
     const dotDist = ringEdge + 13*dpr + bump;
     const lblDist = ringEdge + 33*dpr + bump;
     const dx2 = cx + Math.cos(ma2) * dotDist;
@@ -1564,9 +1583,20 @@ function drawClock(h){
     ctx.fillText(ABBREV[key] || key.slice(0,3).toUpperCase(), lx2, ly2);
   });
 
-  // Current-time marker — a thin accent line across the full ring width (sunrise and
-  // sunset now carry orientation, so no hour ticks). Brand orange sits outside the
-  // monochrome supplement scheme, so it never reads as a dose.
+  // Hour figures — 0 / 6h / 12h / 18h in the gap between the inner face and the ring.
+  {
+    const bandMid = inner + (r - SW/2 - inner) / 2;
+    ctx.font=`500 ${11*dpr}px Switzer,sans-serif`;
+    ctx.fillStyle='rgba(26,22,18,0.34)';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    for(let i=0;i<24;i+=6){
+      const a=(i/24)*Math.PI*2-Math.PI/2;
+      ctx.fillText(i===0?'0':i+'h', cx+Math.cos(a)*bandMid, cy+Math.sin(a)*bandMid);
+    }
+  }
+
+  // Current-time marker — a thin accent line across the full ring width. Brand orange
+  // sits outside the monochrome supplement scheme, so it never reads as a dose.
   const angle=(h/24)*Math.PI*2-Math.PI/2;
   const pulse2=(Math.sin(Date.now()/600)+1)/2;
   const cA=Math.cos(angle), sA=Math.sin(angle);
