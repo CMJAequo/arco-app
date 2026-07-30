@@ -814,6 +814,30 @@ function runDiagnosis(p){
   return results;
 }
 
+// Shared "also in your stack" section — supplements the user takes that we did NOT recommend.
+// borderline = marginal (just below cutoff); flagged = no basis for this profile.
+function stackExtrasHTML(diagnosis){
+  const items = [
+    ...(diagnosis.borderline||[]).map(x=>({name:x.name, reason:x.reason, tag:'marginal', tagColor:'rgba(232,82,10,0.6)'})),
+    ...(diagnosis.flagged||[]).map(x=>({name:x.name, reason:x.reason, tag:'not indicated', tagColor:'rgba(26,22,18,0.32)'}))
+  ];
+  if(!items.length) return '';
+  const rows = items.map((x,i)=>`
+    <div style="padding:13px 0;${i===items.length-1?'':'border-bottom:0.5px solid var(--sep);'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px;">
+        <span style="font-size:13px;font-weight:500;color:rgba(26,22,18,0.6);">${x.name}</span>
+        <span style="font-size:9px;font-weight:600;color:${x.tagColor};letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;">${x.tag}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;">${x.reason}</div>
+    </div>`).join('');
+  return `
+    <div style="padding:4px 0 8px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">also in your stack</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;">You take these, but they're not a priority for your profile.</div>
+    </div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:0 18px;margin-bottom:16px;">${rows}</div>`;
+}
+
 function showDiagnosis(){
   showScreen('screen-dash');
   const diagnosis = runDiagnosis(profile);
@@ -833,12 +857,28 @@ function showDiagnosis(){
   const rows = diagnosis.map((d,i)=>{
     const s = SUPPLEMENTS[d.id];
     if(!s) return '';
-    const confColor = confidenceColors[d.confidence]||'var(--muted)';
     const isLast = i === diagnosis.length-1;
+    const border = isLast?'':'border-bottom:0.5px solid var(--sep);';
+    // Already in the stack → "you take this — here's what to check", not a new recommendation.
+    if(d.alreadyTaking){
+      const check = (s.form_note||'').split('. ')[0].replace(/\.$/,'');
+      return `<div style="padding:16px 0;${border}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:14px;font-weight:500;color:var(--ink);">${s.name}</span>
+            ${evidenceBadge(d.id)}
+          </div>
+          <span style="font-size:10px;font-weight:600;color:#4BB87B;letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;margin-left:8px;">✓ you take this</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${s.dose} · ${s.best_form}</div>
+        <div style="font-size:11px;color:rgba(26,22,18,0.55);line-height:1.55;padding:6px 8px;background:rgba(75,184,123,0.09);border-radius:6px;"><span style="color:#3f9e68;font-weight:600;">Check —</span> ${check}. Timing: ${fmt(s.window[0])}–${fmt(s.window[1])}.</div>
+      </div>`;
+    }
+    const confColor = confidenceColors[d.confidence]||'var(--muted)';
     const reasons = d.reasons.map(r=>`
       <div style="font-size:11px;color:var(--muted);line-height:1.5;padding:3px 0 3px 10px;border-left:1.5px solid var(--sep);">${r}</div>
     `).join('');
-    return `<div style="padding:16px 0;${isLast?'':'border-bottom:0.5px solid var(--sep);'}">
+    return `<div style="padding:16px 0;${border}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:14px;font-weight:500;color:${d.contraindicated?'rgba(26,22,18,0.3)':'var(--ink)'};">${s.name}</span>
@@ -862,6 +902,8 @@ function showDiagnosis(){
     <div style="background:var(--card);border-radius:var(--radius);padding:0 18px;margin-bottom:16px;">
       ${rows}
     </div>
+
+    ${stackExtrasHTML(diagnosis)}
 
     <button onclick="buildDash()" style="width:100%;padding:16px;border-radius:14px;border:none;background:var(--ink);color:#EDE9E1;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:20px;">view my daily protocol →</button>
   `;
@@ -1666,13 +1708,20 @@ function showProtocolTab(){
 
   const cards = diagnosis.filter(d=>!d.contraindicated).map(d => {
     const s = SUPPLEMENTS[d.id]; if(!s) return '';
-    const taken = takenToday.includes(d.id);
     const confColor = confidenceColors[d.confidence]||'var(--muted)';
-    const reasons = d.reasons.map(r=>`
+    const badge = d.alreadyTaking
+      ? `<span style="font-size:10px;color:#4BB87B;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">✓ you take this</span>`
+      : `<span style="font-size:10px;color:${confColor};font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">${d.confidence} risk</span>`;
+    // Already taking → surface a form/timing "what to check" note; otherwise the deficiency reasons.
+    const reasons = d.alreadyTaking ? '' : d.reasons.map(r=>`
       <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;">
         <div style="width:3px;height:3px;border-radius:50%;background:var(--muted);flex-shrink:0;margin-top:5px;"></div>
         <div style="font-size:11px;color:var(--muted);line-height:1.55;">${r}</div>
       </div>`).join('');
+    const bottomNote = d.alreadyTaking
+      ? `<span style="color:#3f9e68;font-weight:600;">Check —</span> ${(s.form_note||'').split('. ')[0].replace(/\.$/,'')}.`
+      : `${s.reason.split('.')[0]}.`;
+    const bottomBg = d.alreadyTaking ? 'rgba(75,184,123,0.09)' : 'rgba(26,22,18,0.04)';
 
     return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
@@ -1680,7 +1729,7 @@ function showProtocolTab(){
           <div style="font-size:15px;font-weight:500;color:var(--ink);margin-bottom:4px;">${s.name}</div>
           <div style="display:flex;gap:6px;align-items:center;">
             ${evidenceBadge(d.id)}
-            <span style="font-size:10px;color:${confColor};font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">${d.confidence} risk</span>
+            ${badge}
           </div>
         </div>
         <div style="text-align:right;">
@@ -1703,8 +1752,8 @@ function showProtocolTab(){
           <div style="font-size:12px;font-weight:500;color:var(--ink);">${fmt(s.window[0])} – ${fmt(s.window[1])}</div>
         </div>
       </div>
-      <div style="margin-bottom:8px;">${reasons}</div>
-      <div style="font-size:11px;color:rgba(26,22,18,0.4);line-height:1.55;padding:8px 10px;background:rgba(26,22,18,0.04);border-radius:6px;">${s.reason.split('.')[0]}.</div>
+      ${reasons?`<div style="margin-bottom:8px;">${reasons}</div>`:''}
+      <div style="font-size:11px;color:rgba(26,22,18,0.4);line-height:1.55;padding:8px 10px;background:${bottomBg};border-radius:6px;">${bottomNote}</div>
     </div>`;
   }).join('');
 
@@ -1715,6 +1764,7 @@ function showProtocolTab(){
       <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;">Each recommendation is tied to your specific inputs. Evidence grades from Examine.com and PubMed.</div>
     </div>
     ${cards}
+    ${stackExtrasHTML(diagnosis)}
     <div style="height:20px;"></div>
   `;
 }
