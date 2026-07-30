@@ -1334,7 +1334,9 @@ function buildDash(){
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
       </div>
-      <div style="text-align:center;margin-top:6px;margin-bottom:2px;font-size:12px;color:var(--muted);letter-spacing:0.02em;">${nextLine}</div>
+      <div style="text-align:center;margin-top:8px;margin-bottom:2px;">
+        <span style="display:inline-block;background:var(--ink);color:#EDE9E1;font-size:12px;font-weight:500;letter-spacing:0.02em;padding:7px 18px;border-radius:100px;">${nextLine}</span>
+      </div>
     </div>
 
     ${buildProtocolCard(h, profile)}
@@ -1492,16 +1494,23 @@ function drawClock(h){
       ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(fmt(hh), cx+ca*tR, cy+sa*tR);
-      // tiny sun-on-horizon glyph, arrow up for sunrise, down for sunset
-      const iR=r+SW/2 + 25*dpr, ix=cx+ca*iR, iy=cy+sa*iR, s=3.2*dpr, hy=iy+s*0.55;
-      ctx.strokeStyle='rgba(26,22,18,0.5)';ctx.lineWidth=1*dpr;ctx.lineCap='round';ctx.lineJoin='round';
-      ctx.beginPath();ctx.moveTo(ix-s*1.4, hy);ctx.lineTo(ix+s*1.4, hy);ctx.stroke();     // horizon
-      ctx.beginPath();ctx.arc(ix, hy, s*0.75, Math.PI, 2*Math.PI);ctx.stroke();            // sun dome
-      const ay=iy-s*0.8;
-      ctx.beginPath();
-      if(rising){ ctx.moveTo(ix-1.8*dpr, ay); ctx.lineTo(ix, ay-2.3*dpr); ctx.lineTo(ix+1.8*dpr, ay); }
-      else { ctx.moveTo(ix-1.8*dpr, ay-2.3*dpr); ctx.lineTo(ix, ay); ctx.lineTo(ix+1.8*dpr, ay-2.3*dpr); }
-      ctx.stroke();
+      // Legible glyphs: a rayed sun at sunrise, a crescent moon at sunset. Sit them
+      // clear of the time label (its horizontal width reaches furthest near 3 o'clock).
+      const iR=r+SW/2 + 34*dpr, ix=cx+ca*iR, iy=cy+sa*iR;
+      ctx.strokeStyle='rgba(26,22,18,0.55)';ctx.fillStyle='rgba(26,22,18,0.55)';
+      ctx.lineWidth=1.2*dpr;ctx.lineCap='round';
+      if(rising){
+        const rad=3*dpr;
+        ctx.beginPath();ctx.arc(ix,iy,rad,0,Math.PI*2);ctx.stroke();
+        for(let k=0;k<8;k++){ const ra=k*Math.PI/4, r1=rad+2*dpr, r2=rad+4.5*dpr;
+          ctx.beginPath();ctx.moveTo(ix+Math.cos(ra)*r1, iy+Math.sin(ra)*r1);ctx.lineTo(ix+Math.cos(ra)*r2, iy+Math.sin(ra)*r2);ctx.stroke(); }
+      } else {
+        const rad=4.6*dpr;
+        ctx.beginPath();
+        ctx.arc(ix,iy,rad,0,Math.PI*2);
+        ctx.arc(ix+rad*0.72, iy-rad*0.32, rad*1.02, 0, Math.PI*2);
+        ctx.fill('evenodd');
+      }
     });
   }
 
@@ -1524,9 +1533,11 @@ function drawClock(h){
   const dotR = 5*dpr;
 
   // State is carried by FILL, not colour: taken = solid, due = hollow + pulsing ring,
-  // upcoming = faint hollow. Monochrome ink on the cream just outside the ring.
+  // overdue = hollow solid stroke, upcoming = faint hollow. Monochrome ink.
   const INK = '26,22,18';
-  const angDistH = (a,b) => { const d=Math.abs(a-b); return Math.min(d,24-d); };
+  // Signed angular distance (hours) of a relative to b, wrapping.
+  const angSignedH = (a,b) => { let d=(a-b)%24; if(d>12)d-=24; if(d<-12)d+=24; return d; };
+  const MARKER_CLEAR = 1.5;   // hours of angular clearance around the whole sun-marker block (tick+time+icon)
   sups2.forEach(s => {
     const key = s.key;
     const taken2 = takenToday.includes(key);
@@ -1534,15 +1545,20 @@ function drawClock(h){
     const group2 = hourGroups2[s.window[0]];
     const idx2 = group2.indexOf(key);
     const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 0.7 : 0;
-    const supH = s.window[0] + spread2;
+    let supH = s.window[0] + spread2;
+    // Treat each sun marker (tick + time label + icon) as one block and nudge a dot
+    // angularly clear of it, to whichever side it already leans, so it never overlaps.
+    if(hasSun){
+      [SR,SS].forEach(mk => {
+        const d = angSignedH(supH, mk);
+        if(Math.abs(d) < MARKER_CLEAR) supH = mk + (d>=0 ? MARKER_CLEAR : -MARKER_CLEAR);
+      });
+    }
     const ma2 = (supH / 24) * Math.PI * 2 - Math.PI / 2;
 
     const ringEdge = r + SW/2;
-    // Push a marker outward if it sits near a sunrise/sunset label+icon, so a dot is
-    // never placed next to a sun time. Generous window (~1h) clears the icon too.
-    const bump = (hasSun && Math.min(angDistH(supH,SR),angDistH(supH,SS)) < 1.0) ? 20*dpr : 0;
-    const dotDist = ringEdge + 13*dpr + bump;
-    const lblDist = ringEdge + 33*dpr + bump;
+    const dotDist = ringEdge + 13*dpr;
+    const lblDist = ringEdge + 33*dpr;
     const dx2 = cx + Math.cos(ma2) * dotDist;
     const dy2 = cy + Math.sin(ma2) * dotDist;
     const lx2 = cx + Math.cos(ma2) * lblDist;
@@ -1561,12 +1577,10 @@ function drawClock(h){
       ctx.fillStyle='#EDE9E1';ctx.fill();
       ctx.strokeStyle=`rgba(${INK},0.95)`;ctx.lineWidth=2*dpr;ctx.stroke();
     } else if(isOverdue2){
-      // overdue: bold dashed hollow ring — past its window, still not taken
+      // overdue: hollow solid-stroke ring, a touch stronger than upcoming
       ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
       ctx.fillStyle='#EDE9E1';ctx.fill();
-      ctx.setLineDash([3*dpr,2.5*dpr]);
-      ctx.strokeStyle=`rgba(${INK},0.85)`;ctx.lineWidth=2*dpr;ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.strokeStyle=`rgba(${INK},0.55)`;ctx.lineWidth=1.5*dpr;ctx.stroke();
     } else {
       // upcoming: faint hollow dot
       ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
@@ -1575,7 +1589,7 @@ function drawClock(h){
     }
 
     // Label
-    const lblOp = taken2 ? 0.7 : isDue2 ? 1.0 : isOverdue2 ? 0.85 : 0.4;
+    const lblOp = taken2 ? 0.7 : isDue2 ? 1.0 : isOverdue2 ? 0.7 : 0.4;
     ctx.font = `600 ${9.5*dpr}px Switzer,sans-serif`;
     ctx.fillStyle = `rgba(${INK},${lblOp})`;
     ctx.textAlign = 'center';
@@ -1591,7 +1605,7 @@ function drawClock(h){
     ctx.textAlign='center';ctx.textBaseline='middle';
     for(let i=0;i<24;i+=6){
       const a=(i/24)*Math.PI*2-Math.PI/2;
-      ctx.fillText(i===0?'0':i+'h', cx+Math.cos(a)*bandMid, cy+Math.sin(a)*bandMid);
+      ctx.fillText(i===0?'00h':i+'h', cx+Math.cos(a)*bandMid, cy+Math.sin(a)*bandMid);
     }
   }
 
