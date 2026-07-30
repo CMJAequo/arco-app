@@ -573,13 +573,24 @@ const steps=[
       <div class="chip${(profile.meds||[]).includes('ppi')?' sel-ink':''}" data-val="ppi" onclick="toggleChipSup(this)">PPIs / antacids</div>
       <div class="chip${(profile.meds||[]).includes('statins')?' sel-ink':''}" data-val="statins" onclick="toggleChipSup(this)">statins</div>
       <div class="chip${(profile.meds||[]).includes('warfarin')?' sel-ink':''}" data-val="warfarin" onclick="toggleChipSup(this)">warfarin</div>
+      <div class="chip${(profile.meds||[]).includes('antihistamine')?' sel-ink':''}" data-val="antihistamine" onclick="toggleChipSup(this);updateAntihist()">antihistamine</div>
       <div class="chip" data-val="none" onclick="toggleChipSup(this)">none</div>
+    </div>
+    <div id="antihist-section" style="display:${(profile.meds||[]).includes('antihistamine')?'block':'none'};margin-top:20px;">
+      <div class="field-label">which type? it changes the effect on sleep</div>
+      <div class="chip-group" id="g-antihist">
+        <div class="chip${profile.antihistamineGen==='first'?' sel-ink':''}" data-val="first" onclick="selChip(this,'g-antihist','ink')">first-gen (chlorphenamine, diphenhydramine)</div>
+        <div class="chip${profile.antihistamineGen==='second'?' sel-ink':''}" data-val="second" onclick="selChip(this,'g-antihist','ink')">second-gen (cetirizine, loratadine, fexofenadine)</div>
+        <div class="chip${profile.antihistamineGen==='unknown'?' sel-ink':''}" data-val="unknown" onclick="selChip(this,'g-antihist','ink')">not sure</div>
+      </div>
     </div>`,
    save:()=>{
      profile.diet=getChip('g-diet')||'omnivore';
      profile.fish=getChip('g-fish')||'sometimes';
      profile.alcohol=getChip('g-alcohol')||'low';
      profile.meds=[...document.querySelectorAll('#g-meds .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');
+     if(profile.meds.includes('antihistamine')) profile.antihistamineGen=getChip('g-antihist')||'unknown';
+     else delete profile.antihistamineGen;
    }
   },
   {title:'what do you take now?',sub:'so arco can fix timing and form, not just tell you what to start.',
@@ -618,6 +629,12 @@ window.updateMagForm=function(){
   const mag=document.querySelector('#g-stack .chip[data-val="magnesium"]');
   const sec=document.getElementById('mag-form-section');
   if(sec) sec.style.display=(mag&&mag.classList.contains('sel-ink'))?'block':'none';
+};
+// Reveal the first/second-gen question only while an antihistamine is selected.
+window.updateAntihist=function(){
+  const ah=document.querySelector('#g-meds .chip[data-val="antihistamine"]');
+  const sec=document.getElementById('antihist-section');
+  if(sec) sec.style.display=(ah&&ah.classList.contains('sel-ink'))?'block':'none';
 };
 
 function renderStep(){
@@ -682,7 +699,9 @@ function showLoading(){
   const iv=setInterval(()=>{pct+=1.4;bar.style.width=Math.min(pct,100)+'%';if(pct%20<1.5&&mi<msgs.length-1){mi++;msgEl.textContent=msgs[mi];}if(pct>=100){clearInterval(iv);setTimeout(showDiagnosis,400);}},35);
 }
 
-function showDash(){showScreen('screen-dash');buildDash();setInterval(buildDash,60000);}
+function showDash(){showScreen('screen-dash');buildDash();setInterval(buildDash,60000);
+  // Fetch today's weather once (cached per day+location), then re-render silently.
+  loadWeather().then(()=>{ try{ buildDash(); }catch(e){} });}
 
 // Approximate latitude band from an IANA timezone (no onboarding question needed).
 // Banded by |latitude|: 'high' >50°, 'mid' 35–50°, 'low' <35°. Unrecognised → 'high'.
@@ -801,7 +820,146 @@ window.pickCityLive = function(el){
   saveProfileRemote();
   closeCheckin();
   showProfileTab();
+  // New location: refetch weather (new cache id), then refresh the dash silently.
+  loadWeather().then(()=>{ try{ if(document.getElementById('screen-dash').classList.contains('active')) buildDash(); }catch(e){} });
 };
+
+// ── DAILY WEATHER (Open-Meteo, no key) ─────────────────────────────────────
+// Two calls (forecast + air quality), one shared daily cache keyed by date+lat/lon,
+// with a separate key per endpoint so one failure retries while a success never
+// refetches. Everything is wrapped in try/catch: on any failure the app behaves
+// exactly as if weather did not exist — nothing is surfaced to the user.
+const WEATHER_CACHE_KEY = 'arco-weather';
+const _pad2 = n => String(n).padStart(2,'0');
+function _todayStr(){ const d=new Date(); return `${d.getFullYear()}-${_pad2(d.getMonth()+1)}-${_pad2(d.getDate())}`; }
+function weatherCacheId(lat, lon){ return `${_todayStr()}|${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`; }
+function isoToDecimal(iso){ if(!iso) return null; const t=String(iso).split('T')[1]; if(!t) return null; const [h,m]=t.split(':').map(Number); return h+(m||0)/60; }
+function _pctile(sortedAsc, p){ if(!sortedAsc.length) return null; return sortedAsc[Math.min(sortedAsc.length-1, Math.floor(p*(sortedAsc.length-1)))]; }
+
+function applyWeatherToProfile(w){
+  if(!w) return;
+  ['forecast','uvToday','sunriseToday','sunsetToday','daylightMinutes','daylightDeltaMin',
+   'pm25','no2','no2Peak','no2Baseline','pollenHigh'].forEach(k=>{ if(w[k]!=null) profile[k]=w[k]; });
+}
+
+async function loadWeather(){
+  try{
+    if(typeof profile.lat!=='number' || typeof profile.lon!=='number') return;   // no location yet
+    const id = weatherCacheId(profile.lat, profile.lon);
+    let cache={}; try{ cache=JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)||'{}')||{}; }catch(e){ cache={}; }
+    let changed=false;
+
+    // ---- FORECAST: UV + daylight + 7-day planning, one request ----
+    if(cache.forecastKey!==id){
+      try{
+        const u=`https://api.open-meteo.com/v1/forecast?latitude=${profile.lat}&longitude=${profile.lon}`+
+                `&daily=uv_index_max,sunrise,sunset,daylight_duration,precipitation_sum,precipitation_probability_max,temperature_2m_max`+
+                `&timezone=auto&forecast_days=7`;
+        const d=(await (await fetch(u)).json()).daily;
+        if(d&&d.time){
+          const days=d.time.map((date,i)=>({
+            date,
+            uv: d.uv_index_max?d.uv_index_max[i]:null,
+            sunrise: d.sunrise?isoToDecimal(d.sunrise[i]):null,
+            sunset: d.sunset?isoToDecimal(d.sunset[i]):null,
+            daylightMin: (d.daylight_duration&&d.daylight_duration[i]!=null)?Math.round(d.daylight_duration[i]/60):null,
+            precip: d.precipitation_sum?d.precipitation_sum[i]:null,
+            precipProb: d.precipitation_probability_max?d.precipitation_probability_max[i]:null,
+            tmax: d.temperature_2m_max?d.temperature_2m_max[i]:null
+          }));
+          cache.forecast=days;
+          cache.uvToday=days[0].uv;
+          cache.sunriseToday=days[0].sunrise;
+          cache.sunsetToday=days[0].sunset;
+          cache.daylightMinutes=days[0].daylightMin;
+          // Daylight slope from the 7-day array (positive = shrinking). Works on first run, low noise.
+          const first=days[0].daylightMin, last=days[days.length-1].daylightMin;
+          cache.daylightDeltaMin=(first!=null&&last!=null&&days.length>1)?(first-last)/(days.length-1):null;
+          cache.forecastKey=id; changed=true;
+        }
+      }catch(e){/* silent */}
+    }
+
+    // ---- AIR QUALITY: pm2.5 + NO2 + pollen, relative to a 7-day local baseline ----
+    if(cache.airKey!==id){
+      try{
+        const u=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${profile.lat}&longitude=${profile.lon}`+
+                `&current=pm2_5,nitrogen_dioxide&hourly=nitrogen_dioxide,birch_pollen,grass_pollen,alder_pollen`+
+                `&past_days=7&forecast_days=1&timezone=auto`;
+        const j=await (await fetch(u)).json();
+        if(j.current){ cache.pm25=j.current.pm2_5??null; cache.no2=j.current.nitrogen_dioxide??null; }
+        const H=j.hourly;
+        if(H&&H.time){
+          const today=_todayStr(), isToday=t=>String(t).startsWith(today);
+          // NO2: baseline = median of the past week; signal = today's commute-window (07:00-10:00) peak.
+          const no2=H.nitrogen_dioxide||[];
+          const no2Sorted=no2.filter(x=>typeof x==='number').sort((a,b)=>a-b);
+          cache.no2Baseline=_pctile(no2Sorted,0.5);
+          let peak=null;
+          H.time.forEach((t,i)=>{ if(isToday(t)){ const hr=+String(t).split('T')[1].split(':')[0]; if(hr>=7&&hr<10&&typeof no2[i]==='number') peak=Math.max(peak==null?-1:peak, no2[i]); } });
+          cache.no2Peak=peak;
+          // POLLEN: relative to the type's own recent range. Highest-peaking type wins.
+          let best=null, bestRaw=-1;
+          [['birch',H.birch_pollen],['grass',H.grass_pollen],['alder',H.alder_pollen]].forEach(([type,arr])=>{
+            if(!Array.isArray(arr)) return;
+            const nums=arr.filter(x=>typeof x==='number'); if(!nums.length) return;
+            const sorted=[...nums].sort((a,b)=>a-b);
+            const p50=_pctile(sorted,0.5), p90=_pctile(sorted,0.9);
+            let todayPeak=null;
+            H.time.forEach((t,i)=>{ if(isToday(t)&&typeof arr[i]==='number') todayPeak=Math.max(todayPeak==null?-1:todayPeak, arr[i]); });
+            if(todayPeak==null) return;
+            // "upper part of its own recent range"; p90>p50 guards against all-zero / out-of-season.
+            const high = todayPeak>0 && p90>p50 && todayPeak>=p90;
+            if(todayPeak>bestRaw){ bestRaw=todayPeak; best={type, Type:type[0].toUpperCase()+type.slice(1), value:Math.round(todayPeak), high}; }
+          });
+          if(best) cache.pollenHigh=best;
+        }
+        cache.airKey=id; changed=true;
+      }catch(e){/* silent */}
+    }
+
+    if(changed){ try{ localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cache)); }catch(e){} }
+    applyWeatherToProfile(cache);
+  }catch(e){/* silent: app behaves exactly as without weather */}
+}
+
+// Whether they are indoors for the entire daylight window on a workday.
+// Returns { leavesBeforeSunrise, arrivesAfterSunset, workdayDaylightMinutes }.
+function computeDaylightExposure(p){
+  const sr=p.sunriseToday, ss=p.sunsetToday;
+  if(sr==null||ss==null) return null;
+  const leave = typeof p.workStart==='number' ? p.workStart : (p.wakeTime??p.wake);
+  const home  = typeof p.workEnd==='number'   ? p.workEnd   : (p.bedTime??p.bed);
+  const leavesBeforeSunrise = typeof leave==='number' ? leave<=sr : false;
+  const arrivesAfterSunset  = typeof home==='number'  ? home>=ss  : false;
+  let free;
+  if(typeof p.workStart==='number' && typeof p.workEnd==='number'){
+    free = Math.max(0, p.workStart-sr)*60 + Math.max(0, ss-p.workEnd)*60;
+  } else { free = Math.max(0, ss-sr)*60; }
+  return { leavesBeforeSunrise, arrivesAfterSunset, workdayDaylightMinutes: Math.round(free) };
+}
+
+// Weekly outdoor/training plan from the 7-day forecast.
+function planWeek(p){
+  const f=p.forecast; if(!Array.isArray(f)||f.length<2) return null;
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const freqMap={'1-2':2,'3-4':3,'5+':5};
+  const trainCount=freqMap[p.trainingFreq]??3;
+  const trainDecimal={morning:7,afternoon:14,evening:20}[p.trainingTime]??null;
+  const days=f.map((d,i)=>{
+    const dt=new Date(d.date+'T12:00');
+    return {...d, i, name:DOW[dt.getDay()],
+      outdoorOK:(d.precipProb==null?true:d.precipProb<40)&&(d.tmax==null||d.tmax>=8)};
+  });
+  const restCount=Math.max(0,7-trainCount);
+  const byClear=[...days].sort((a,b)=>(a.precipProb??0)-(b.precipProb??0)||(a.precip??0)-(b.precip??0));
+  const restSet=new Set(byClear.slice(0,restCount).map(d=>d.i));
+  days.forEach(d=>{ d.suggestion=restSet.has(d.i)?'rest':'train'; d.outside=d.outdoorOK; });
+  const warm=days.filter(d=>d.tmax!=null&&d.tmax>15);
+  const lastWarmDay=warm.length?warm[warm.length-1]:null;
+  const sunsetBeforeTraining=(trainDecimal!=null)?days.find(d=>d.sunset!=null&&d.sunset<trainDecimal):null;
+  return {days, lastWarmDay, sunsetBeforeTraining, trainCount, trainDecimal};
+}
 
 // ── DIAGNOSIS ENGINE ──
 function runDiagnosis(p){
@@ -1177,6 +1335,8 @@ function buildDash(){
 
     ${dailyContradictionCard()}
 
+    ${weekPlanCard()}
+
     <div class="now-card" style="margin-bottom:12px;">
       <div class="now-window-label">open window</div>
       <div class="now-window-time">${windowTimeStr(h, profile)}</div>
@@ -1298,6 +1458,24 @@ function drawClock(h){
 
   // Inner face
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
+
+  // Daylight band — sunrise→sunset in a warm low-opacity tone, sitting in the gap
+  // just inside the supplement ring. Two faint ticks mark sunrise and sunset. No labels.
+  if(typeof profile.sunriseToday==='number' && typeof profile.sunsetToday==='number'){
+    const sr=profile.sunriseToday, ss=profile.sunsetToday;
+    const bandR=(inner + (r - SW/2))/2, bandW=9*dpr;
+    const ang=hh=>(hh/24)*Math.PI*2 - Math.PI/2;
+    const a1=ang(sr), a2=ang(ss);
+    ctx.beginPath();ctx.arc(cx,cy,bandR,a1,a2);
+    ctx.strokeStyle='rgba(232,88,10,0.11)';ctx.lineWidth=bandW;ctx.lineCap='butt';ctx.stroke();
+    [a1,a2].forEach(a=>{
+      const rIn=bandR-bandW/2-1.5*dpr, rOut=bandR+bandW/2+1.5*dpr;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*rIn, cy+Math.sin(a)*rIn);
+      ctx.lineTo(cx+Math.cos(a)*rOut, cy+Math.sin(a)*rOut);
+      ctx.strokeStyle='rgba(232,88,10,0.45)';ctx.lineWidth=1.5*dpr;ctx.stroke();
+    });
+  }
 
   // Supplement markers — connector line → dot → label
   const ABBREV = {
@@ -1633,6 +1811,40 @@ function dailyContradictionCard(){
   return `<div style="background:var(--card);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;">${contradictionInner(pick)}</div>`;
 }
 
+// Seven-day outdoor/training plan from the live forecast. Days 1-3 stated plainly,
+// 4-7 hedged and visually receded. Silent when there is no forecast.
+function _wxGlyph(d){
+  const p = d.precipProb;
+  if(p!=null && p>=50) return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 15a4 4 0 0 1 .6-7.95A5 5 0 0 1 16.5 8 3.5 3.5 0 0 1 17 15" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 17l-1 2.5M13 17l-1 2.5M17 17l-1 2.5" stroke="var(--orange)" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+  if(p!=null && p>=25) return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 16a4 4 0 0 1 .6-7.95A5 5 0 0 1 16.5 9 3.5 3.5 0 0 1 17 16H6z" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3.8" stroke="var(--orange)" stroke-width="1.4"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M6 18l1.4-1.4" stroke="var(--orange)" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+}
+function weekPlanCard(){
+  let plan; try{ plan = planWeek(profile); }catch(e){ return ''; }
+  if(!plan || !plan.days || plan.days.length < 2) return '';
+  const cols = plan.days.map((d,i)=>{
+    const hedged = i >= 3;                                   // days 4-7 recede
+    const sug = d.suggestion==='rest' ? 'rest' : (d.outside ? 'outside' : 'train');
+    const sugColor = sug==='rest' ? 'var(--muted)' : sug==='outside' ? 'var(--orange)' : 'var(--ink)';
+    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;${hedged?'opacity:0.5;':''}">
+      <div style="font-size:9.5px;letter-spacing:0.05em;color:var(--muted);text-transform:uppercase;">${d.name}</div>
+      <div style="height:15px;line-height:0;">${_wxGlyph(d)}</div>
+      <div style="font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;">${d.tmax!=null?Math.round(d.tmax)+'°':'&nbsp;'}</div>
+      <div style="font-size:9.5px;font-weight:600;color:${sugColor};letter-spacing:0.01em;">${sug}</div>
+    </div>`;
+  }).join('');
+  const flags = [];
+  if(plan.lastWarmDay){ const d=plan.lastWarmDay; flags.push(`Last day above 15°C ${d.i>=3?'looks to be':'is'} ${d.name}.`); }
+  if(plan.sunsetBeforeTraining){ const d=plan.sunsetBeforeTraining; flags.push(`Sunset ${d.i>=3?'looks to fall':'falls'} before your usual training time from ${d.name}.`); }
+  const flagHtml = flags.length ? `<div style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--sep);">${flags.join('<br>')}</div>` : '';
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 14px 14px;margin-bottom:12px;">
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px;">the week ahead</div>
+    <div style="display:flex;gap:3px;">${cols}</div>
+    ${flagHtml}
+    <div style="font-size:10px;color:var(--muted);opacity:0.75;margin-top:10px;">forecasts beyond 4 days are less reliable</div>
+  </div>`;
+}
+
 window.openCheckin = function(){
   currentQuestion = getNextQuestion();
   currentQAnswer = null;
@@ -1956,7 +2168,10 @@ const RULES = [
     id: 'dark-commute-both-ways',
     domain: 'circadian',
     requires: ['workType', 'wakeTime', 'bedTime', 'latBand'],
-    fires: (p) => p.latBand === 'high' && isDarkMonths() && p.sunlight === 'rarely',
+    // Seasonal approximation — suppressed when live sunrise/sunset data is present,
+    // in which case the data-driven 'dark-both-ways' takes over.
+    fires: (p) => (p.sunriseToday != null && p.sunsetToday != null) ? false
+      : (p.latBand === 'high' && isDarkMonths() && p.sunlight === 'rarely'),
     contradiction:
       'From October to March you leave in the dark and come home in the dark. ' +
       'On a workday you may not see daylight at all.',
@@ -2457,7 +2672,10 @@ const RULES = [
     id: 'winter-no-synthesis',
     domain: 'geography',
     requires: ['latBand'],
-    fires: (p) => p.latBand === 'high' && isDarkMonths(),
+    // Live UV beats the seasonal approximation: if the sun is actually making D3
+    // possible today (UV >= 3), this must not fire regardless of month. Falls back
+    // to month logic when uvToday is unavailable.
+    fires: (p) => (p.uvToday != null && p.uvToday >= 3) ? false : (p.latBand === 'high' && isDarkMonths()),
     contradiction:
       'Between October and March at this latitude your skin makes no vitamin ' +
       'D at all. Not less — none.',
@@ -2504,7 +2722,9 @@ const RULES = [
     id: 'cycling-rush-hour',
     domain: 'geography',
     requires: ['commuteMode'],
-    fires: (p) => p.commuteMode === 'cycle',
+    // Generic version — suppressed when live NO2 data is present, in which case
+    // the data-driven 'cycling-air-today' takes over.
+    fires: (p) => p.commuteMode === 'cycle' && p.no2 == null,
     contradiction:
       'Cycling to work is the best single thing in your profile. Doing it ' +
       'along an arterial road at 8:15am is the one qualifier.',
@@ -2547,6 +2767,144 @@ const RULES = [
       { cost: 'free', action: 'Take calls standing or walking.' }
     ],
     surprise: 7
+  },
+
+  // ── LIVE WEATHER RULES (require the daily Open-Meteo fetch) ──
+  {
+    id: 'uv-synthesis-window',
+    domain: 'geography',
+    requires: ['uvToday'],
+    fires: (p) => p.uvToday >= 3,
+    contradiction:
+      'UV index is {uvToday} in {city} today. Above 3 your skin can actually ' +
+      'make vitamin D, the condition that is not met here for most of the year.',
+    mechanism:
+      'Cutaneous D3 synthesis requires UVB at a wavelength that only reaches ' +
+      'ground level above roughly UV index 3.',
+    evidence: 'STRONG',
+    values: (p) => ({ uvToday: Math.round(p.uvToday) }),
+    fixes: [
+      { cost: 'free', action: '15 minutes outside with forearms exposed, around midday.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'dark-both-ways',
+    domain: 'circadian',
+    requires: ['sunriseToday', 'sunsetToday', 'wakeTime', 'bedTime'],
+    fires: (p) => { const e = computeDaylightExposure(p); return !!(e && e.leavesBeforeSunrise && e.arrivesAfterSunset); },
+    contradiction:
+      'You left before sunrise and got home after sunset. Today you saw no ' +
+      'daylight at all.',
+    mechanism:
+      'Light in the first hours after waking is the primary signal that sets ' +
+      'circadian timing. Indoor lighting is 10-100x too dim to do it.',
+    evidence: 'STRONG',
+    fixes: [
+      { cost: 'free', action: 'Ten minutes outside at lunch is the only daylight available on a winter workday.' },
+      { cost: 'free', action: 'Sit near the window. Even weak daylight beats office lighting.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'daylight-shrinking',
+    domain: 'circadian',
+    requires: ['daylightMinutes'],
+    // Only in the steep-loss stretch: mid-September to mid-December.
+    fires: (p) => {
+      const m = new Date().getMonth() + 1, day = new Date().getDate();
+      const afterMidSep = (m === 9 && day >= 15) || m === 10 || m === 11 || (m === 12 && day <= 15);
+      return afterMidSep && (p.daylightDeltaMin == null || p.daylightDeltaMin > 0);
+    },
+    contradiction:
+      'You are losing about {x} minutes of daylight a day. By the end of the ' +
+      'month that is {y} hours less than today.',
+    mechanism:
+      'Day length is contracting fastest around the equinox. The change is ' +
+      'largest at high latitude and compounds week over week.',
+    evidence: 'STRONG',
+    values: (p) => {
+      const perDay = p.daylightDeltaMin != null ? p.daylightDeltaMin : 0;
+      const d = new Date(), end = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const daysLeft = end - d.getDate();
+      return { x: Math.max(0, Math.round(perDay)), y: Math.max(0, Math.round(perDay * daysLeft / 60 * 10) / 10) };
+    },
+    fixes: [
+      { cost: 'free', action: 'Anchor a fixed daily outdoor slot now, while it is still easy to get.' },
+      { cost: 90, action: 'A 10,000 lux lamp bridges the months when daylight runs out before you are free.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'cycling-air-today',
+    domain: 'geography',
+    requires: ['commuteMode', 'no2'],
+    // Relative to the location's own recent baseline, not a fixed limit that a
+    // roadside city would trip every day.
+    fires: (p) => p.commuteMode === 'cycle' && p.no2Peak != null && p.no2Baseline != null
+      && p.no2Baseline > 0 && p.no2Peak >= p.no2Baseline * 1.5,
+    contradiction:
+      'NO2 is elevated on your commute today. You breathe several times harder ' +
+      'cycling than sitting, so you take in proportionally more.',
+    mechanism:
+      'Traffic NO2 irritates the airways, and the several-fold rise in ' +
+      'ventilation during cycling multiplies the dose actually inhaled.',
+    evidence: 'MODERATE',
+    fixes: [
+      { cost: 'free', action: 'A back-street route one block off the main road cuts exposure substantially.' },
+      { cost: 'free', action: 'Thirty minutes earlier is meaningfully cleaner.' },
+      { cost: 'free', action: 'Keep cycling. The exercise benefit outweighs the exposure.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'pollen-sleep',
+    domain: 'environment',
+    requires: ['pollenHigh', 'sleepLatency'],
+    fires: (p) => !!(p.pollenHigh && p.pollenHigh.high) && p.sleepLatency >= 20,
+    contradiction:
+      '{Type} pollen is high this week. Allergic congestion fragments sleep, ' +
+      'and you are already taking {x} minutes to fall asleep.',
+    mechanism:
+      'Nasal congestion from an allergic response raises night-time arousals ' +
+      'and lowers sleep efficiency, independent of how tired you are.',
+    evidence: 'MODERATE',
+    values: (p) => ({ Type: p.pollenHigh.Type, x: Math.round(p.sleepLatency) }),
+    fixes: [
+      { cost: 'free', action: 'Shower before bed to get pollen off your skin and hair.' },
+      { cost: 'free', action: 'Windows shut overnight during peak weeks.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'antihistamine-sleep',
+    domain: 'environment',
+    requires: ['pollenHigh', 'meds'],
+    // Only first-generation (sedating) antihistamines meaningfully suppress REM.
+    // Second-generation does not fire; 'not sure' fires so the fix is to find out.
+    fires: (p) => !!(p.pollenHigh && p.pollenHigh.high) && has(p.meds, 'antihistamine')
+      && p.antihistamineGen !== 'second',
+    contradiction:
+      'First-generation antihistamines are sedating but suppress REM. The drug ' +
+      'you are taking to sleep through hay fever is changing the sleep you get.',
+    mechanism:
+      'Sedating first-generation antihistamines cross the blood-brain barrier ' +
+      'and reduce REM sleep; second-generation ones (cetirizine, loratadine, ' +
+      'fexofenadine) do so far less.',
+    evidence: 'MODERATE',
+    citation:
+      'Sedating antihistamines alter sleep architecture; second-generation ' +
+      'agents much less so.',
+    fixes: [
+      { cost: 'free', action: 'A non-sedating second-generation antihistamine if you are on an older one.' },
+      { cost: 'free', action: 'Worth asking a pharmacist which type yours is.' }
+    ],
+    surprise: 8
   }
 
 ];
@@ -2563,6 +2921,21 @@ const evidenceWeight = (grade) => {
   return EVIDENCE_WEIGHT[key] ?? 0.5;
 };
 
+// Fill {token} placeholders in a fired rule's copy from the profile plus any
+// computed values() the rule supplies. Rules without tokens pass through untouched.
+function interpolateRule(rule, p) {
+  const hasTokens = /\{\w+\}/.test((rule.contradiction||'') + (rule.mechanism||''));
+  if (!hasTokens && !rule.values) return rule;
+  const vals = Object.assign({}, p, rule.values ? rule.values(p) : {});
+  const fill = s => typeof s === 'string'
+    ? s.replace(/\{(\w+)\}/g, (m,k) => vals[k] != null ? String(vals[k]) : m) : s;
+  return Object.assign({}, rule, {
+    contradiction: fill(rule.contradiction),
+    mechanism: fill(rule.mechanism),
+    fixes: rule.fixes.map(f => Object.assign({}, f, { action: fill(f.action) }))
+  });
+}
+
 function runContradictions(profile) {
   const fired = [];
   const skipped = [];
@@ -2573,7 +2946,7 @@ function runContradictions(profile) {
       continue;
     }
     try {
-      if (rule.fires(profile)) fired.push(rule);
+      if (rule.fires(profile)) fired.push(interpolateRule(rule, profile));
     } catch (err) {
       console.error(`[arco] rule ${rule.id} threw`, err);
     }
@@ -2641,7 +3014,11 @@ function toContradictionProfile(p){
   // Direct pass-throughs once collected (added by later onboarding steps):
   ['wakeTime','bedTime','lastCoffeeTime','weekendWakeTime','magnesiumForm','morningLight',
    'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
-   'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours'
+   'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours',
+   'antihistamineGen','workStart','workEnd',
+   // location + live weather (populated by loadWeather):
+   'city','uvToday','sunriseToday','sunsetToday','daylightMinutes','daylightDeltaMin',
+   'no2','no2Peak','no2Baseline','pollenHigh','forecast'
   ].forEach(f => { if(p[f]!=null) e[f]=p[f]; });
   return e;
 }
