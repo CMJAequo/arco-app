@@ -88,6 +88,10 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .login-sent-title{color:#EDE9E1;font-size:20px;font-weight:400;letter-spacing:-0.01em;margin-bottom:10px;}
 .login-sent-sub{color:#EDE9E1;opacity:0.45;font-size:13px;line-height:1.6;margin-bottom:24px;}
 .login-link{background:none;border:none;color:#EDE9E1;opacity:0.4;font-size:12px;font-family:var(--font);letter-spacing:0.04em;cursor:pointer;text-decoration:underline;text-underline-offset:3px;}
+.login-code-input{font-size:26px;letter-spacing:8px;font-weight:500;text-align:center;text-indent:8px;caret-color:var(--orange);}
+.login-input-error,.login-input-error:focus{border-color:#cc3333;}
+.login-back{align-self:flex-start;background:none;border:none;color:#EDE9E1;opacity:0.4;font-size:12px;font-family:var(--font);letter-spacing:0.03em;cursor:pointer;margin-bottom:24px;padding:0;}
+.login-btn:disabled{opacity:0.55;cursor:default;}
 
 /* DASHBOARD TOP BAR */
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px 14px;background:var(--bg);}
@@ -232,17 +236,19 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   <div class="login-wrap">
     <div class="login-logo">arco</div>
     <div class="login-tag">recovery system</div>
-    <!-- EMAIL ENTRY STATE -->
-    <div id="login-form" style="width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;">
-      <input class="login-input" id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')sendMagicLink()">
-      <button class="login-btn" onclick="sendMagicLink()">Continue</button>
-      <div class="login-note" id="login-note">we'll send you a magic link</div>
+    <!-- STAGE 1: EMAIL -->
+    <div id="login-email-stage" style="width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center;">
+      <input class="login-input" id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" onkeydown="if(event.key==='Enter')sendCode()">
+      <button class="login-btn" id="login-email-btn" onclick="sendCode()">Continue</button>
+      <div class="login-note" id="login-email-note">we'll email you a 6-digit code</div>
     </div>
-    <!-- CHECK YOUR EMAIL STATE -->
-    <div id="login-sent" style="width:100%;max-width:300px;display:none;flex-direction:column;align-items:center;text-align:center;">
-      <div class="login-sent-title">check your email</div>
-      <div class="login-sent-sub">we sent a magic link to<br><span id="login-sent-email" style="color:var(--orange);"></span></div>
-      <button class="login-link" onclick="resetLogin()">use a different email</button>
+    <!-- STAGE 2: CODE -->
+    <div id="login-code-stage" style="width:100%;max-width:300px;display:none;flex-direction:column;align-items:center;text-align:center;">
+      <button class="login-back" id="login-back" onclick="backToEmail()">&larr; change email</button>
+      <div class="login-sent-sub">enter the 6-digit code sent to<br><span id="login-code-email" style="color:var(--orange);"></span></div>
+      <input class="login-input login-code-input" id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" oninput="onCodeInput(this)">
+      <div class="login-note" id="login-code-note" style="opacity:0;">&nbsp;</div>
+      <button class="login-link" id="login-resend" onclick="resendCode()">resend code</button>
     </div>
   </div>
 </div>
@@ -1907,33 +1913,107 @@ let currentUser = null;
 // Local calendar date as YYYY-MM-DD for the `date` columns
 function isoDate(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-window.sendMagicLink = async function(){
+// ── EMAIL OTP (6-digit code) ──
+// Magic links can't work in an iOS home-screen PWA — it has its own storage container
+// separate from Safari, so the link opens in Safari and the session lands in the wrong place.
+// A code the user types stays inside the PWA. Requires the Supabase "Magic Link" email
+// template to surface {{ .Token }}.
+let _loginEmail = '';
+let _resendTimer = null;
+
+function _setNote(el, text, kind){ // kind: 'muted' | 'error' | 'ok'
+  el.textContent = text;
+  el.style.opacity = kind==='muted' ? '0.35' : '0.9';
+  el.style.color = kind==='error' ? 'var(--orange)' : kind==='ok' ? '#4BB87B' : '#EDE9E1';
+}
+
+// Stage 1 → send the code
+window.sendCode = async function(){
   const input = document.getElementById('login-email');
-  const note = document.getElementById('login-note');
+  const note = document.getElementById('login-email-note');
+  const btn = document.getElementById('login-email-btn');
   const email = (input.value||'').trim();
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
-    note.textContent = 'enter a valid email address';
-    note.style.color = 'var(--orange)'; note.style.opacity = '0.9';
-    return;
-  }
-  note.textContent = 'sending...'; note.style.color = '#EDE9E1'; note.style.opacity = '0.3';
-  const {error} = await _supabase.auth.signInWithOtp({email, options:{emailRedirectTo: window.location.origin}});
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ _setNote(note, 'enter a valid email address', 'error'); return; }
+  btn.disabled = true; _setNote(note, 'sending code...', 'muted');
+  const {error} = await _supabase.auth.signInWithOtp({email, options:{shouldCreateUser:true}});
+  btn.disabled = false;
+  if(error){ _setNote(note, error.message || 'something went wrong — try again', 'error'); return; }
+  _loginEmail = email;
+  document.getElementById('login-code-email').textContent = email;
+  document.getElementById('login-email-stage').style.display = 'none';
+  document.getElementById('login-code-stage').style.display = 'flex';
+  const code = document.getElementById('login-code');
+  code.value = ''; code.classList.remove('login-input-error');
+  document.getElementById('login-code-note').style.opacity = '0';
+  startResendCooldown();
+  setTimeout(()=>code.focus(), 60);
+};
+
+// Keep only digits; auto-submit at 6
+window.onCodeInput = function(el){
+  el.value = el.value.replace(/\D/g,'').slice(0,6);
+  el.classList.remove('login-input-error');
+  document.getElementById('login-code-note').style.opacity = '0';
+  if(el.value.length === 6) verifyCode();
+};
+
+// Stage 2 → verify the code
+window.verifyCode = async function(){
+  const input = document.getElementById('login-code');
+  const note = document.getElementById('login-code-note');
+  const code = (input.value||'').trim();
+  if(code.length !== 6) return;
+  input.disabled = true; _setNote(note, 'verifying...', 'muted');
+  const {error} = await _supabase.auth.verifyOtp({email:_loginEmail, token:code, type:'email'});
   if(error){
-    note.textContent = error.message || 'something went wrong — try again';
-    note.style.color = 'var(--orange)'; note.style.opacity = '0.9';
+    input.disabled = false;
+    input.classList.add('login-input-error');
+    _setNote(note, 'incorrect code — try again', 'error');
+    input.value = '';
+    setTimeout(()=>input.focus(), 40);
     return;
   }
-  // Show the "check your email" confirmation state
-  document.getElementById('login-sent-email').textContent = email;
-  document.getElementById('login-form').style.display = 'none';
-  document.getElementById('login-sent').style.display = 'flex';
+  // Success — onAuthStateChange('SIGNED_IN') runs the existing routing and swaps screens.
+  _setNote(note, 'signing you in...', 'ok');
 };
-window.resetLogin = function(){
-  document.getElementById('login-sent').style.display = 'none';
-  document.getElementById('login-form').style.display = 'flex';
-  const note = document.getElementById('login-note');
-  note.textContent = "we'll send you a magic link"; note.style.color = '#EDE9E1'; note.style.opacity = '0.3';
+
+window.backToEmail = function(){
+  clearInterval(_resendTimer);
+  document.getElementById('login-code-stage').style.display = 'none';
+  document.getElementById('login-email-stage').style.display = 'flex';
+  _setNote(document.getElementById('login-email-note'), "we'll email you a 6-digit code", 'muted');
+  setTimeout(()=>document.getElementById('login-email').focus(), 40);
 };
+
+window.resendCode = async function(){
+  const btn = document.getElementById('login-resend');
+  if(btn.dataset.cd === '1') return; // still in cooldown
+  const note = document.getElementById('login-code-note');
+  const {error} = await _supabase.auth.signInWithOtp({email:_loginEmail, options:{shouldCreateUser:true}});
+  if(error){ _setNote(note, error.message || 'could not resend — try again', 'error'); return; }
+  _setNote(note, 'new code sent', 'muted');
+  startResendCooldown();
+};
+
+// 30-second resend cooldown
+function startResendCooldown(){
+  const btn = document.getElementById('login-resend');
+  btn.dataset.cd = '1';
+  btn.style.opacity = '0.35'; btn.style.textDecoration = 'none'; btn.style.cursor = 'default';
+  let s = 30;
+  btn.textContent = 'resend code in ' + s + 's';
+  clearInterval(_resendTimer);
+  _resendTimer = setInterval(()=>{
+    s--;
+    if(s <= 0){
+      clearInterval(_resendTimer);
+      btn.dataset.cd = '0'; btn.textContent = 'resend code';
+      btn.style.opacity = ''; btn.style.textDecoration = ''; btn.style.cursor = '';
+    } else {
+      btn.textContent = 'resend code in ' + s + 's';
+    }
+  }, 1000);
+}
 window.arcoSignOut = function(){
   try{localStorage.clear();}catch(e){}
   _supabase.auth.signOut().finally(()=>location.reload());
