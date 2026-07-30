@@ -1306,6 +1306,19 @@ function buildDash(){
   const hr=now.getHours();
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
 
+  // Status line under the clock. Prefer the next FUTURE dose; otherwise surface a
+  // due-now or overdue dose so nothing untaken is silently hidden.
+  const SHORT_NAME={vitd:'vitamin D3',magnesium:'magnesium',omega3:'omega-3',zinc:'zinc',b12:'B12',k2:'vitamin K2',coq10:'CoQ10',ashwagandha:'ashwagandha',magnesium_threonate:'magnesium L-threonate',creatine:'creatine',iron:'iron'};
+  const _nm=s=>SHORT_NAME[s.key]||s.name.toLowerCase();
+  const _untaken=(profile.supplements||[]).map(k=>supView(k)).filter(s=>s&&!s.anytime&&!takenToday.includes(s.key));
+  const _future=_untaken.filter(s=>s.window[0]>h).sort((a,b)=>a.window[0]-b.window[0]);
+  const _dueNow=_untaken.filter(s=>h>=s.window[0]&&h<s.window[1]).sort((a,b)=>a.window[0]-b.window[0]);
+  const _overdue=_untaken.filter(s=>h>=s.window[1]).sort((a,b)=>a.window[0]-b.window[0]);
+  const nextLine = _future[0] ? `next: ${_nm(_future[0])}, ${fmt(_future[0].window[0])}`
+    : _dueNow[0] ? `due now: ${_nm(_dueNow[0])}`
+    : _overdue[0] ? `overdue: ${_nm(_overdue[0])}, ${fmt(_overdue[0].window[0])}`
+    : 'protocol complete for today';
+
   document.getElementById('dash-body').innerHTML=`
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
@@ -1315,20 +1328,7 @@ function buildDash(){
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
       </div>
-      <div style="display:flex;justify-content:center;gap:18px;margin-top:4px;margin-bottom:2px;">
-        <div style="display:flex;align-items:center;gap:5px;">
-          <div style="width:6px;height:6px;border-radius:50%;background:#4BB87B;flex-shrink:0;"></div>
-          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">taken</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:5px;">
-          <div style="width:6px;height:6px;border-radius:50%;background:#E8520A;flex-shrink:0;"></div>
-          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">take now</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:5px;">
-          <div style="width:6px;height:6px;border-radius:50%;background:rgba(26,22,18,0.2);flex-shrink:0;"></div>
-          <span style="font-size:10px;color:var(--muted);letter-spacing:0.04em;">upcoming</span>
-        </div>
-      </div>
+      <div style="text-align:center;margin-top:6px;margin-bottom:2px;font-size:12px;color:var(--muted);letter-spacing:0.02em;">${nextLine}</div>
     </div>
 
     ${buildProtocolCard(h, profile)}
@@ -1425,32 +1425,42 @@ function drawClock(h){
     return colorMap[colorMap.length-1];
   }
 
-  // Draw ring as tiny arc segments, each with interpolated color
+  // Day/night ring: colour aligned to real sunrise/sunset when we have them,
+  // otherwise fall back to the previous decorative gradient.
+  const hasSun = typeof profile.sunriseToday==='number' && typeof profile.sunsetToday==='number';
+  const SR = profile.sunriseToday, SS = profile.sunsetToday;
+  const GOLD=[214,158,52], DUSK=[196,116,40], NIGHT=[66,72,88];   // warm gold day, warm dawn/dusk, deep slate night
+  const TW=1/3;                                                   // ~20 min soft transition either side
+  const clamp01=x=>Math.max(0,Math.min(1,x));
+  function daylightness(hr){
+    // 0 = full night, 1 = full day, with smooth ramps across dawn and dusk
+    if(hr>=SR-TW && hr<=SR+TW) return clamp01((hr-(SR-TW))/(2*TW));   // dawn
+    if(hr>=SS-TW && hr<=SS+TW) return 1-clamp01((hr-(SS-TW))/(2*TW)); // dusk
+    return (hr>SR+TW && hr<SS-TW) ? 1 : 0;
+  }
+  function ringColor(hr){
+    const t=daylightness(hr), lerp=(a,b,u)=>a+(b-a)*u;
+    let c;
+    if(t<0.5){ const u=t/0.5; c=[lerp(NIGHT[0],DUSK[0],u),lerp(NIGHT[1],DUSK[1],u),lerp(NIGHT[2],DUSK[2],u)]; }
+    else { const u=(t-0.5)/0.5; c=[lerp(DUSK[0],GOLD[0],u),lerp(DUSK[1],GOLD[1],u),lerp(DUSK[2],GOLD[2],u)]; }
+    return c.map(Math.round);
+  }
+  const _wins = hasSun ? null : getWindowsSimple();
+
+  // Draw ring as tiny arc segments
   const STEPS=360;
   for(let i=0;i<STEPS;i++){
     const t0=i/STEPS,t1=(i+1)/STEPS;
-    const h0=t0*24,h1=t1*24;
-    const hMid=(h0+h1)/2;
+    const hMid=((t0*24)+(t1*24))/2;
     const a0=t0*Math.PI*2-Math.PI/2;
     const a1=t1*Math.PI*2-Math.PI/2;
-    const c=getColor(hMid);
-    const isActive=hMid>=h-0.5&&hMid<h+0.5; // near current time
-    const isCurrent=hMid>=0&&hMid<=h; // passed hours always full bright? No — only current hour is brightest
-    // Dimming: past and future are 55% brightness, current window is 100%
-    const inCurrentWindow=(()=>{
-      const wins=getWindowsSimple();
-      return wins.some(w=>hMid>=w.s&&hMid<w.e&&h>=w.s&&h<w.e);
-    })();
-    const brightness=inCurrentWindow?1.0:0.45;
-    const rr=Math.round(c.r*brightness+(255-255)*0+(inCurrentWindow?0:0));
-    const gg=Math.round(c.g*brightness);
-    const bb=Math.round(c.b*brightness);
+    let col;
+    if(hasSun){ col=ringColor(hMid); }
+    else { const c=getColor(hMid); const b=_wins.some(w=>hMid>=w.s&&hMid<w.e&&h>=w.s&&h<w.e)?1.0:0.45; col=[Math.round(c.r*b),Math.round(c.g*b),Math.round(c.b*b)]; }
     ctx.beginPath();
     ctx.arc(cx,cy,r,a0-0.002,a1+0.002);
-    ctx.strokeStyle=`rgb(${rr},${gg},${bb})`;
-    ctx.lineWidth=SW;
-    ctx.lineCap='butt';
-    ctx.stroke();
+    ctx.strokeStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.lineWidth=SW;ctx.lineCap='butt';ctx.stroke();
   }
 
   // Thin track behind — draw full circle in very dark first
@@ -1459,22 +1469,21 @@ function drawClock(h){
   // Inner face
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
 
-  // Night band — the sunset→sunrise stretch shaded in a cool dark tone, sitting in the
-  // gap just inside the supplement ring. Daylight is the unshaded gap. Dark-on-cream
-  // reads immediately, and in winter the shaded arc wrapping most of the ring is the
-  // truthful picture. Two ticks mark sunrise and sunset. No labels.
-  if(typeof profile.sunriseToday==='number' && typeof profile.sunsetToday==='number'){
-    const sr=profile.sunriseToday, ss=profile.sunsetToday;
-    const bandR=(inner + (r - SW/2))/2, bandW=9*dpr;
+  // Sunrise / sunset ticks across the ring, with the times in small type just outside.
+  if(hasSun){
     const ang=hh=>(hh/24)*Math.PI*2 - Math.PI/2;
-    ctx.beginPath();ctx.arc(cx,cy,bandR,ang(ss),ang(sr)+Math.PI*2);
-    ctx.strokeStyle='rgba(40,48,62,0.22)';ctx.lineWidth=bandW;ctx.lineCap='butt';ctx.stroke();
-    [ang(sr),ang(ss)].forEach(a=>{
-      const rIn=bandR-bandW/2-1.5*dpr, rOut=bandR+bandW/2+1.5*dpr;
+    [SR,SS].forEach(hh=>{
+      const a=ang(hh);
+      const rIn=r-SW/2-2*dpr, rOut=r+SW/2+2*dpr;
       ctx.beginPath();
       ctx.moveTo(cx+Math.cos(a)*rIn, cy+Math.sin(a)*rIn);
       ctx.lineTo(cx+Math.cos(a)*rOut, cy+Math.sin(a)*rOut);
-      ctx.strokeStyle='rgba(40,48,62,0.6)';ctx.lineWidth=1.5*dpr;ctx.stroke();
+      ctx.strokeStyle='rgba(237,233,225,0.9)';ctx.lineWidth=1.5*dpr;ctx.stroke();
+      const tR=r+SW/2 + 11*dpr;
+      ctx.font=`600 ${8.5*dpr}px Switzer,sans-serif`;
+      ctx.fillStyle='rgba(26,22,18,0.5)';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(fmt(hh), cx+Math.cos(a)*tR, cy+Math.sin(a)*tR);
     });
   }
 
@@ -1496,6 +1505,10 @@ function drawClock(h){
   const pulse = (Math.sin(Date.now() / 400) + 1) / 2;
   const dotR = 5*dpr;
 
+  // State is carried by FILL, not colour: taken = solid, due = hollow + pulsing ring,
+  // upcoming = faint hollow. Monochrome ink on the cream just outside the ring.
+  const INK = '26,22,18';
+  const angDistH = (a,b) => { const d=Math.abs(a-b); return Math.min(d,24-d); };
   sups2.forEach(s => {
     const key = s.key;
     const taken2 = takenToday.includes(key);
@@ -1503,87 +1516,69 @@ function drawClock(h){
     const group2 = hourGroups2[s.window[0]];
     const idx2 = group2.indexOf(key);
     const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 0.7 : 0;
-    const ma2 = ((s.window[0] + spread2) / 24) * Math.PI * 2 - Math.PI / 2;
+    const supH = s.window[0] + spread2;
+    const ma2 = (supH / 24) * Math.PI * 2 - Math.PI / 2;
 
-    const ringEdge  = r + SW/2;
-    const dotDist   = ringEdge + 12*dpr;
-    const lblDist   = ringEdge + 36*dpr;   // further from dot
-    const lineStart = ringEdge + 3*dpr;
-
+    const ringEdge = r + SW/2;
+    // Push a marker outward if it sits near a sunrise/sunset label, so the two never collide.
+    const bump = (hasSun && Math.min(angDistH(supH,SR),angDistH(supH,SS)) < 0.7) ? 16*dpr : 0;
+    const dotDist = ringEdge + 13*dpr + bump;
+    const lblDist = ringEdge + 33*dpr + bump;
     const dx2 = cx + Math.cos(ma2) * dotDist;
     const dy2 = cy + Math.sin(ma2) * dotDist;
     const lx2 = cx + Math.cos(ma2) * lblDist;
     const ly2 = cy + Math.sin(ma2) * lblDist;
-    const lnx1 = cx + Math.cos(ma2) * lineStart;
-    const lny1 = cy + Math.sin(ma2) * lineStart;
 
-    const dotCol = taken2 ? '#4BB87B' : isDue2 ? '#E8520A' : 'rgba(26,22,18,0.22)';
-    const txtCol = taken2 ? '#4BB87B' : isDue2 ? '#E8520A' : 'rgba(26,22,18,0.32)';
-
-    // No connector line — removed
-
-    // Pulsating halo — only for due supplements
-    if(isDue2 && !taken2){
-      const haloR = dotR + (4 + pulse * 5) * dpr;
-      ctx.beginPath();
-      ctx.arc(dx2, dy2, haloR, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(232,82,10,${0.06 + pulse * 0.1})`;
-      ctx.fill();
+    const isOverdue2 = !taken2 && h >= s.window[1];
+    if(taken2){
+      // taken: solid filled dot
+      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
+      ctx.fillStyle=`rgba(${INK},0.9)`;ctx.fill();
+    } else if(isDue2){
+      // due now: hollow dot ringed by a subtle pulse
+      ctx.beginPath();ctx.arc(dx2,dy2,dotR+(3+pulse*3)*dpr,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(${INK},${0.22+pulse*0.33})`;ctx.lineWidth=1.5*dpr;ctx.stroke();
+      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
+      ctx.fillStyle='#EDE9E1';ctx.fill();
+      ctx.strokeStyle=`rgba(${INK},0.95)`;ctx.lineWidth=2*dpr;ctx.stroke();
+    } else if(isOverdue2){
+      // overdue: bold dashed hollow ring — past its window, still not taken
+      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
+      ctx.fillStyle='#EDE9E1';ctx.fill();
+      ctx.setLineDash([3*dpr,2.5*dpr]);
+      ctx.strokeStyle=`rgba(${INK},0.85)`;ctx.lineWidth=2*dpr;ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // upcoming: faint hollow dot
+      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
+      ctx.fillStyle='#EDE9E1';ctx.fill();
+      ctx.strokeStyle=`rgba(${INK},0.4)`;ctx.lineWidth=1.5*dpr;ctx.stroke();
     }
 
-    // Main dot
-    ctx.beginPath();
-    ctx.arc(dx2, dy2, dotR, 0, Math.PI*2);
-    ctx.fillStyle = dotCol;
-    ctx.fill();
-
-    // Yellow pulsing centre — only for due
-    if(isDue2 && !taken2){
-      const coreR = (1.5 + pulse * 1.5) * dpr;
-      ctx.beginPath();
-      ctx.arc(dx2, dy2, coreR, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(255,214,0,${0.7 + pulse * 0.3})`;
-      ctx.fill();
-    }
-
-    // Label — bigger, further out
+    // Label
+    const lblOp = taken2 ? 0.7 : isDue2 ? 1.0 : isOverdue2 ? 0.85 : 0.4;
     ctx.font = `600 ${9.5*dpr}px Switzer,sans-serif`;
-    ctx.fillStyle = txtCol;
+    ctx.fillStyle = `rgba(${INK},${lblOp})`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(ABBREV[key] || key.slice(0,3).toUpperCase(), lx2, ly2);
   });
 
-  // Hour labels — centered in grey band between inner face and ring
-  const bandMid = inner + (r - SW/2 - inner) / 2;
-  for(let i=0;i<24;i+=6){
-    const a=(i/24)*Math.PI*2-Math.PI/2;
-    ctx.font=`500 ${11*dpr}px Switzer,sans-serif`;
-    ctx.fillStyle='rgba(26,22,18,0.38)';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(i===0?'0':i+'h',cx+Math.cos(a)*bandMid,cy+Math.sin(a)*bandMid);
-  }
-
-  // Current time marker — pulsating
+  // Current-time marker — a thin accent line across the full ring width (sunrise and
+  // sunset now carry orientation, so no hour ticks). Brand orange sits outside the
+  // monochrome supplement scheme, so it never reads as a dose.
   const angle=(h/24)*Math.PI*2-Math.PI/2;
-  const mx=cx+Math.cos(angle)*r,my=cy+Math.sin(angle)*r;
-  const pulse2=(Math.sin(Date.now()/500)+1)/2; // 0→1→0
-  // Outer pulsing halo
-  const haloR2=(10+pulse2*8)*dpr;
-  ctx.beginPath();ctx.arc(mx,my,haloR2,0,Math.PI*2);
-  ctx.fillStyle=`rgba(255,255,255,${0.08+pulse2*0.12})`;
-  ctx.fill();
-  // White ring
-  ctx.beginPath();ctx.arc(mx,my,8*dpr,0,Math.PI*2);
-  ctx.fillStyle='rgba(255,255,255,0.95)';ctx.fill();
-  // Dark centre
-  ctx.beginPath();ctx.arc(mx,my,5*dpr,0,Math.PI*2);
-  ctx.fillStyle='#1A1612';ctx.fill();
-  // Pulsing bright yellow core
-  const coreR=(2+pulse2*1.5)*dpr;
-  ctx.beginPath();ctx.arc(mx,my,coreR,0,Math.PI*2);
-  ctx.fillStyle=`rgba(255,214,0,${0.8+pulse2*0.2})`;
-  ctx.fill();
+  const pulse2=(Math.sin(Date.now()/600)+1)/2;
+  const cA=Math.cos(angle), sA=Math.sin(angle);
+  const mIn=r-SW/2-3*dpr, mOut=r+SW/2+3*dpr;
+  // soft under-glow
+  ctx.beginPath();
+  ctx.moveTo(cx+cA*mIn, cy+sA*mIn);ctx.lineTo(cx+cA*mOut, cy+sA*mOut);
+  ctx.strokeStyle=`rgba(232,82,10,${0.12+pulse2*0.12})`;ctx.lineWidth=6*dpr;ctx.lineCap='round';ctx.stroke();
+  // crisp line
+  ctx.beginPath();
+  ctx.moveTo(cx+cA*mIn, cy+sA*mIn);ctx.lineTo(cx+cA*mOut, cy+sA*mOut);
+  ctx.strokeStyle='rgba(232,82,10,0.95)';ctx.lineWidth=2*dpr;ctx.lineCap='round';ctx.stroke();
 }
 
 function getWindowsSimple(){
