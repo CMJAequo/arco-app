@@ -1626,6 +1626,817 @@ Object.entries(SUPPLEMENT_DB.supplements).forEach(([key, s]) => {
   };
 });
 
+/* ============================================================================
+   ARCO — CONTRADICTION ENGINE v1  (inlined per single-file rule; see schema
+   in the header comment below). Wired to existing profile fields only via
+   toContradictionProfile(); rules needing uncollected fields self-skip.
+   ============================================================================ */
+
+const has = (arr, x) => Array.isArray(arr) && arr.includes(x);
+
+// Hours between two 24h decimal times, handling midnight wraparound.
+const hoursUntil = (from, to) => (to >= from ? to - from : 24 - from + to);
+
+// Northern-hemisphere month check for high-latitude vitamin D window.
+const isDarkMonths = (d = new Date()) => [9, 10, 11, 0, 1, 2].includes(d.getMonth());
+
+const sleepDuration = (p) =>
+  p.sleepHours != null
+    ? p.sleepHours
+    : (p.bedTime != null && p.wakeTime != null ? hoursUntil(p.bedTime, p.wakeTime) : null);
+
+const RULES = [
+
+  {
+    id: 'caffeine-sleep-loop',
+    domain: 'circadian',
+    requires: ['lastCoffeeTime', 'bedTime'],
+    fires: (p) => hoursUntil(p.lastCoffeeTime, p.bedTime) < 8,
+    contradiction:
+      'You drink coffee in the afternoon to get through it. That coffee is ' +
+      'why you sleep badly. Bad sleep is why you need the coffee.',
+    mechanism:
+      'Caffeine has a half-life of roughly 5 hours, so about a quarter of an ' +
+      'afternoon cup is still circulating at bedtime. It blocks adenosine, ' +
+      'the molecule that builds sleep pressure across the day.',
+    evidence: 'STRONG',
+    citation:
+      'Drake et al. 2013, J Clin Sleep Med — caffeine 6h before bed reduced ' +
+      'sleep by over 1h, and subjects did not notice the effect.',
+    fixes: [
+      { cost: 'free', action: 'Last coffee before 11am for seven days. Note your sleep latency.' },
+      { cost: 'free', action: 'If the afternoon dip is the problem, 10 minutes outside beats a cup.' },
+      { cost: 12, action: 'Decaf for the afternoon cup — same ritual, no adenosine block.' }
+    ],
+    surprise: 9
+  },
+
+  {
+    id: 'no-morning-light',
+    domain: 'circadian',
+    requires: ['morningLight'],
+    fires: (p) => p.morningLight === false,
+    contradiction:
+      'You cannot fall asleep at night, and the cause is what happens in the ' +
+      'morning. Your body has no signal telling it when the day started.',
+    mechanism:
+      'Light hitting the retina in the first hour after waking sets the ' +
+      'circadian clock and starts a roughly 14-16 hour timer to melatonin ' +
+      'release. Indoor lighting is 10-100x too dim to do this reliably.',
+    evidence: 'STRONG',
+    citation:
+      'Established chronobiology — Czeisler, Duffy, Roenneberg. Light is the ' +
+      'primary zeitgeber for the human circadian system.',
+    fixes: [
+      { cost: 'free', action: 'Ten minutes outside within an hour of waking. Coffee on the doorstep counts.' },
+      { cost: 'free', action: 'Overcast still works — outdoor shade is far brighter than any indoor room.' },
+      { cost: 90, action: 'A 10,000 lux lamp for the months when it is dark before you leave.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'social-jetlag',
+    domain: 'circadian',
+    requires: ['wakeTime', 'weekendWakeTime'],
+    fires: (p) => (p.weekendWakeTime - p.wakeTime) >= 1.5,
+    contradiction:
+      'You sleep in at the weekend to repay the week. It is not repayment — ' +
+      'you are giving yourself jet lag every Saturday.',
+    mechanism:
+      'A weekend shift of 2+ hours moves your circadian phase in the same way ' +
+      'crossing time zones does. Sunday night insomnia and Monday fog are the ' +
+      'symptoms of flying back.',
+    evidence: 'MODERATE-STRONG',
+    citation:
+      'Roenneberg et al. — social jetlag associated with metabolic and mood ' +
+      'outcomes. Observational; causal direction is not fully settled.',
+    fixes: [
+      { cost: 'free', action: 'Cap the weekend lie-in at one hour. Nap in the afternoon instead if you need it.' },
+      { cost: 'free', action: 'Consistency of wake time matters more than total duration.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'screens-into-bed',
+    domain: 'circadian',
+    requires: ['screensBeforeBed'],
+    fires: (p) => p.screensBeforeBed >= 30,
+    contradiction:
+      'You go straight from cognitively demanding work into bed and expect ' +
+      'your brain to change gear on command.',
+    mechanism:
+      'The bigger effect is cognitive arousal, not blue light. Work, email and ' +
+      'markets keep the sympathetic nervous system engaged; sleep onset ' +
+      'requires the opposite state.',
+    evidence: 'MODERATE',
+    citation:
+      'Blue-light suppression of melatonin is well demonstrated, but ' +
+      'real-world screen effects are dominated by content and arousal. Do not ' +
+      'overclaim the blue-light mechanism specifically.',
+    fixes: [
+      { cost: 'free', action: 'Last 30 minutes: no work, no Slack, no markets. Anything else is fine.' },
+      { cost: 'free', action: 'A physical transition — shower, reading, walking — signals the change better than a filter.' }
+    ],
+    surprise: 5
+  },
+
+  {
+    id: 'dark-commute-both-ways',
+    domain: 'circadian',
+    requires: ['workType', 'wakeTime', 'bedTime', 'latBand'],
+    fires: (p) => p.latBand === 'high' && isDarkMonths() && p.sunlight === 'rarely',
+    contradiction:
+      'From October to March you leave in the dark and come home in the dark. ' +
+      'On a workday you may not see daylight at all.',
+    mechanism:
+      'Without a morning light anchor the circadian system free-runs, ' +
+      'degrading sleep timing, alertness and mood. This is a bigger effect ' +
+      'than the vitamin D consequence people usually focus on.',
+    evidence: 'STRONG',
+    citation:
+      'Circadian entrainment literature; seasonal mood and alertness effects ' +
+      'at high latitude are well documented.',
+    fixes: [
+      { cost: 'free', action: 'Ten minutes outside at lunch. This is the only daylight available on a winter workday.' },
+      { cost: 'free', action: 'Sit near the window. Even weak daylight beats office lighting.' },
+      { cost: 90, action: 'A sunrise-simulation or 10,000 lux lamp for the dark months.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'training-without-repair',
+    domain: 'training',
+    requires: ['trainingDays', 'sleepHours'],
+    fires: (p) => p.trainingDays >= 3 && sleepDuration(p) < 7,
+    contradiction:
+      'You train hard to get stronger. You sleep six hours. Adaptation ' +
+      'happens during sleep — you are doing the damage and skipping the repair.',
+    mechanism:
+      'Growth hormone release, muscle protein synthesis and the endocrine ' +
+      'recovery from training load all depend on adequate sleep. Under-sleeping ' +
+      'a training block means paying the cost without collecting the benefit.',
+    evidence: 'STRONG',
+    citation:
+      'Leproult & Van Cauter 2011, JAMA — one week at 5h sleep reduced daytime ' +
+      'testosterone 10-15% in healthy young men.',
+    fixes: [
+      { cost: 'free', action: 'Thirty minutes earlier to bed will do more than an extra session.' },
+      { cost: 'free', action: 'For two weeks: drop one session, add one hour of sleep. Compare how you feel.' }
+    ],
+    surprise: 9
+  },
+
+  {
+    id: 'late-training-sleep-onset',
+    domain: 'training',
+    requires: ['trainingTime', 'bedTime'],
+    fires: (p) => p.trainingTime >= 19 && hoursUntil(p.trainingTime + 1.5, p.bedTime) < 2,
+    contradiction:
+      'You train at 8pm and are in bed by 11. Your body is still winding up ' +
+      'when you need it winding down.',
+    mechanism:
+      'Core temperature and sympathetic arousal stay elevated for 2-3 hours ' +
+      'after hard training. Sleep onset requires a falling core temperature.',
+    evidence: 'MODERATE',
+    citation:
+      'Consistent direction across studies, but effect size varies widely by ' +
+      'individual and by session intensity. Some people are unaffected.',
+    fixes: [
+      { cost: 'free', action: 'Move one session a week earlier. One is enough to feel the difference.' },
+      { cost: 'free', action: 'A hot shower 90 minutes before bed accelerates the temperature drop.' },
+      { cost: 'free', action: 'If the late slot is fixed, keep the last 20 minutes low intensity.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'no-rest-days',
+    domain: 'training',
+    requires: ['trainingDays', 'stress'],
+    fires: (p) => p.trainingDays >= 5 && p.stress >= 4,
+    contradiction:
+      'High training load and high life stress are the same stimulus to your ' +
+      'body. You are running both at maximum and calling one of them recovery.',
+    mechanism:
+      'Training stress and psychological stress share the HPA axis. Total load ' +
+      'is what matters, not how it is categorised.',
+    evidence: 'MODERATE',
+    citation:
+      'Overtraining and allostatic load literature. Direction is well ' +
+      'supported; individual thresholds are not predictable.',
+    fixes: [
+      { cost: 'free', action: 'Two genuine rest days in a high-stress week, not one.' },
+      { cost: 'free', action: 'Swap one hard session for a walk when work load spikes.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'plateau-is-recovery',
+    domain: 'training',
+    requires: ['trainingDays', 'sleepHours', 'stress'],
+    fires: (p) => p.trainingDays >= 4 && sleepDuration(p) < 7 && p.stress >= 4,
+    contradiction:
+      'You have plateaued and assume you need more volume. Every input you ' +
+      'have given us says the limiter is recovery, not stimulus.',
+    mechanism:
+      'When sleep is short and stress is high, additional training volume ' +
+      'increases the recovery deficit rather than the adaptation.',
+    evidence: 'MODERATE',
+    citation:
+      'Inference from established sleep-performance and overtraining findings. ' +
+      'Present as a hypothesis to test, not a diagnosis.',
+    fixes: [
+      { cost: 'free', action: 'Deload week: half the volume, same intensity. See what happens.' },
+      { cost: 'free', action: 'Add an hour of sleep before adding a session.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'alcohol-winddown',
+    domain: 'substances',
+    requires: ['alcoholDrinksPerWeek', 'alcoholTiming'],
+    fires: (p) => p.alcoholDrinksPerWeek >= 3 && p.alcoholTiming === 'late',
+    contradiction:
+      'You have a drink to wind down into sleep. It is why you wake at 4am.',
+    mechanism:
+      'Alcohol shortens sleep onset, then suppresses REM and fragments the ' +
+      'second half of the night as it is metabolised. You fall asleep faster ' +
+      'and sleep worse.',
+    evidence: 'STRONG',
+    citation:
+      'Well established across sleep-architecture studies; dose-dependent.',
+    fixes: [
+      { cost: 'free', action: 'Finish drinking three hours before bed. Change the timing before changing the amount.' },
+      { cost: 'free', action: 'The effect is dose-linear — two is genuinely different from four.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'alcohol-vs-training',
+    domain: 'substances',
+    requires: ['alcoholDrinksPerWeek', 'trainingDays'],
+    fires: (p) => p.alcoholDrinksPerWeek >= 4 && p.trainingDays >= 3,
+    contradiction:
+      'You train four times a week and drink four to seven times. Alcohol ' +
+      'after training suppresses the muscle protein synthesis you trained to ' +
+      'trigger.',
+    mechanism:
+      'Post-exercise alcohol impairs the MPS response even when protein intake ' +
+      'is adequate.',
+    evidence: 'MODERATE',
+    citation:
+      'Parr et al. 2014, PLoS ONE — small sample, high doses (~1.5g/kg). ' +
+      'Direction is clear; the effect at two drinks is not established.',
+    fixes: [
+      { cost: 'free', action: 'Never on training days. Everything else stays the same.' },
+      { cost: 'free', action: 'If you do drink, get the protein in first.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'magnesium-oxide',
+    domain: 'supplements',
+    requires: ['currentStack', 'magnesiumForm'],
+    fires: (p) => has(p.currentStack, 'magnesium') && p.magnesiumForm === 'oxide',
+    contradiction:
+      'You take magnesium every night. About 4% of it reaches you.',
+    mechanism:
+      'Magnesium oxide is poorly soluble and poorly absorbed. It is also the ' +
+      'cheapest form, which is why it is the default on supermarket shelves.',
+    evidence: 'STRONG',
+    citation:
+      'Firoz & Graber 2001, Magnesium Research — ~4% fractional absorption for ' +
+      'oxide vs ~24-33% for organic salts. Small crossover study (n=16), but ' +
+      'the direction is replicated.',
+    fixes: [
+      { cost: 'free', action: 'Check your label. If it says oxide, that is the problem.' },
+      { cost: 14, action: 'Switch to glycinate or citrate.' },
+      { cost: 'free', action: 'Note: a 500mg glycinate tablet is only ~70mg elemental magnesium. The label number is not the dose.' }
+    ],
+    surprise: 9
+  },
+
+  {
+    id: 'fish-oil-underdosed',
+    domain: 'supplements',
+    requires: ['currentStack'],
+    fires: (p) => has(p.currentStack, 'omega3'),
+    contradiction:
+      'Your "1000mg fish oil" is roughly 300mg EPA+DHA. The trials showing ' +
+      'benefit used 2000mg or more.',
+    mechanism:
+      'Non-concentrated fish oil is at most ~30% EPA+DHA by weight. The number ' +
+      'on the front of the bottle is the oil, not the active fraction.',
+    evidence: 'STRONG',
+    citation:
+      'Standard fish oil composition; trial doses from the cardiovascular and ' +
+      'inflammation literature (e.g. REDUCE-IT used 4g pure EPA).',
+    fixes: [
+      { cost: 'free', action: 'Read the EPA number on the back, not the capsule size on the front.' },
+      { cost: 22, action: 'A concentrate at 60%+ EPA gets you to a real dose without eight capsules.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'antioxidants-blunt-adaptation',
+    domain: 'supplements',
+    requires: ['currentStack', 'trainingDays'],
+    fires: (p) =>
+      (has(p.currentStack, 'vitaminC') || has(p.currentStack, 'vitaminE')) &&
+      p.trainingDays >= 3,
+    contradiction:
+      'You take vitamin C and E for recovery. They blunt the adaptation you ' +
+      'are recovering for.',
+    mechanism:
+      'Training stress signals adaptation partly through reactive oxygen ' +
+      'species. High-dose antioxidants suppress that signal.',
+    evidence: 'MODERATE-STRONG',
+    citation:
+      'Paulsen et al. 2014, J Physiol (blunted mitochondrial biogenesis); ' +
+      'Gomez-Cabrera 2008, Am J Clin Nutr. Molecular markers are consistent; ' +
+      'performance outcomes less so. Effect is for high isolated doses taken ' +
+      'around training — whole-food antioxidants are not implicated.',
+    fixes: [
+      { cost: 'free', action: 'Stop, or take them well away from training.' },
+      { cost: 'free', action: 'Food-based antioxidants do not carry the same effect.' }
+    ],
+    surprise: 9
+  },
+
+  {
+    id: 'creatine-timing-myth',
+    domain: 'supplements',
+    requires: ['currentStack'],
+    fires: (p) => has(p.currentStack, 'creatine'),
+    contradiction:
+      'You are thinking about when to take creatine. It does not matter.',
+    mechanism:
+      'Muscle creatine saturation depends on total daily intake over weeks, ' +
+      'not on timing relative to training.',
+    evidence: 'STRONG',
+    citation: 'Consistent across the creatine literature.',
+    fixes: [
+      { cost: 'free', action: 'Take it whenever you will actually remember. 3-5g monohydrate.' },
+      { cost: 'free', action: 'Monohydrate. The expensive forms have no demonstrated advantage.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'd3-without-fat',
+    domain: 'supplements',
+    requires: ['currentStack'],
+    fires: (p) => has(p.currentStack, 'vitaminD'),
+    contradiction:
+      'Vitamin D is fat-soluble. Taken with black coffee on an empty stomach, ' +
+      'much less of it gets in.',
+    mechanism:
+      'Absorption of fat-soluble vitamins requires dietary fat to form ' +
+      'micelles in the small intestine.',
+    evidence: 'MODERATE',
+    citation:
+      'Direction is clear; reported magnitude varies substantially between ' +
+      'studies.',
+    fixes: [
+      { cost: 'free', action: 'Take it with your largest meal of the day.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'zinc-copper',
+    domain: 'supplements',
+    requires: ['currentStack'],
+    fires: (p) => has(p.currentStack, 'zinc'),
+    contradiction:
+      'Zinc and copper compete for the same absorption pathway. Sustained ' +
+      'high-dose zinc depletes copper.',
+    mechanism:
+      'Both use the same intestinal transporter; zinc also induces ' +
+      'metallothionein, which preferentially binds copper.',
+    evidence: 'STRONG at high dose, WEAK at typical dose',
+    citation:
+      'Well established above ~40mg/day sustained. At 15-25mg the effect is ' +
+      'probably negligible — grade this rule by their actual dose, and do not ' +
+      'alarm someone taking 15mg.',
+    fixes: [
+      { cost: 'free', action: 'Stay under 25mg/day unless there is a specific reason not to.' },
+      { cost: 8, action: 'If you are on a high dose long-term, 1-2mg copper alongside.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'iron-with-coffee',
+    domain: 'supplements',
+    requires: ['currentStack', 'lastCoffeeTime'],
+    fires: (p) => has(p.currentStack, 'iron'),
+    contradiction:
+      'You take iron with breakfast. If breakfast includes coffee or tea, ' +
+      'most of it is being blocked.',
+    mechanism:
+      'Polyphenols in coffee and tea bind non-haem iron and substantially ' +
+      'reduce absorption. Vitamin C does the opposite.',
+    evidence: 'STRONG',
+    citation: 'Consistently demonstrated in absorption studies.',
+    fixes: [
+      { cost: 'free', action: 'Iron away from coffee and tea by at least an hour.' },
+      { cost: 'free', action: 'Take it with something containing vitamin C — that increases absorption.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'no-fish-no-omega3',
+    domain: 'diet',
+    requires: ['fish', 'currentStack'],
+    fires: (p) => p.fish === 'never' && !has(p.currentStack, 'omega3'),
+    contradiction:
+      'You never eat oily fish and do not supplement. There is no other ' +
+      'meaningful dietary source of EPA and DHA.',
+    mechanism:
+      'Plant ALA converts to EPA at roughly 5-8% and to DHA at under 0.5%. ' +
+      'Flax and chia do not close this gap.',
+    evidence: 'STRONG',
+    citation: 'Conversion rates consistently reported across the literature.',
+    fixes: [
+      { cost: 'free', action: 'Two portions of oily fish a week covers it entirely.' },
+      { cost: 22, action: 'Algal oil if you do not want fish — same EPA/DHA, plant source.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'vegan-b12',
+    domain: 'diet',
+    requires: ['meat', 'currentStack'],
+    fires: (p) => p.meat === 'none' && !has(p.currentStack, 'b12'),
+    contradiction:
+      'There is no reliable plant source of B12. This one is not optional.',
+    mechanism:
+      'B12 is produced by bacteria and reaches humans through animal foods or ' +
+      'fortification. Deficiency develops slowly and can cause irreversible ' +
+      'neurological damage before blood counts change.',
+    evidence: 'STRONG',
+    citation: 'Uncontested.',
+    fixes: [
+      { cost: 6, action: 'Any B12 supplement. This is the one to not skip.' },
+      { cost: 'free', action: 'Ask for active B12 (holotranscobalamin) rather than serum B12 if you get tested.' }
+    ],
+    surprise: 4,
+    importance: 10
+  },
+
+  {
+    id: 'low-meat-creatine',
+    domain: 'diet',
+    requires: ['meat', 'trainingDays'],
+    fires: (p) => (p.meat === 'none' || p.meat === 'low') && p.trainingDays >= 3,
+    contradiction:
+      'You train seriously and eat little meat. Dietary creatine comes almost ' +
+      'entirely from meat and fish, so you are starting from a lower baseline ' +
+      'than an omnivore — which means a larger effect from supplementing.',
+    mechanism:
+      'Muscle creatine stores are lower in vegetarians; the response to ' +
+      'supplementation is correspondingly larger.',
+    evidence: 'STRONG',
+    citation:
+      'Consistently demonstrated — vegetarians show greater increases in ' +
+      'muscle creatine and performance than omnivores.',
+    fixes: [
+      { cost: 8, action: '3-5g creatine monohydrate daily. Cheapest high-evidence supplement available.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'protein-backloaded',
+    domain: 'diet',
+    requires: ['proteinBreakfast', 'trainingDays'],
+    fires: (p) => p.proteinBreakfast === false && p.trainingDays >= 3,
+    contradiction:
+      'You train four times a week and eat almost no protein until dinner. ' +
+      'Distribution matters, not just the daily total.',
+    mechanism:
+      'Muscle protein synthesis responds to per-meal protein dose. A single ' +
+      'large evening serving does not produce the same 24h response as even ' +
+      'distribution.',
+    evidence: 'MODERATE',
+    citation:
+      'Distribution effects are demonstrated but modest relative to hitting ' +
+      'total daily intake. Do not overstate.',
+    fixes: [
+      { cost: 'free', action: '30g at breakfast. Greek yoghurt, eggs, or a shake — no cooking required.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'late-eating-sleep',
+    domain: 'diet',
+    requires: ['eatingWindowEnd', 'bedTime'],
+    fires: (p) => hoursUntil(p.eatingWindowEnd, p.bedTime) < 2,
+    contradiction:
+      'You eat late because you get home late, then wonder why your sleep is ' +
+      'shallow.',
+    mechanism:
+      'Digestion raises core temperature and metabolic rate at exactly the ' +
+      'point where both need to fall for good sleep.',
+    evidence: 'MODERATE',
+    citation:
+      'Consistent direction; effect size in healthy young adults is modest.',
+    fixes: [
+      { cost: 'free', action: 'Finish eating two hours before bed where the schedule allows.' },
+      { cost: 'free', action: 'If you cannot, make the late meal smaller and lighter rather than skipping it.' }
+    ],
+    surprise: 5
+  },
+
+  {
+    id: 'ppi-b12-magnesium',
+    domain: 'medications',
+    requires: ['meds'],
+    fires: (p) => has(p.meds, 'ppi'),
+    contradiction:
+      'PPIs reduce stomach acid. You need stomach acid to liberate B12 from ' +
+      'food and to absorb magnesium.',
+    mechanism:
+      'Gastric acid is required to cleave B12 from dietary protein before ' +
+      'intrinsic-factor binding. Long-term PPI use is also associated with ' +
+      'hypomagnesaemia.',
+    evidence: 'STRONG',
+    citation:
+      'Both interactions are documented and carry regulatory warnings.',
+    fixes: [
+      { cost: 'free', action: 'Worth asking your GP to check B12 if you have been on these a while.' },
+      { cost: 'free', action: 'This is a known interaction, not a side effect you would feel.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'metformin-b12',
+    domain: 'medications',
+    requires: ['meds'],
+    fires: (p) => has(p.meds, 'metformin'),
+    contradiction:
+      'Metformin reduces B12 absorption. Deficiency is common with long-term ' +
+      'use and often missed.',
+    mechanism: 'Interferes with calcium-dependent B12 uptake in the ileum.',
+    evidence: 'STRONG',
+    citation:
+      'Serum B12 reductions of 14-30% reported; deficiency prevalence 22-30% ' +
+      'with long-term use.',
+    fixes: [
+      { cost: 'free', action: 'Ask for a B12 check — this is a recognised interaction.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'contraception-micronutrients',
+    domain: 'medications',
+    requires: ['meds', 'sex'],
+    fires: (p) => has(p.meds, 'contraception'),
+    contradiction:
+      'Hormonal contraception is associated with lower levels of several ' +
+      'micronutrients — B6, folate, B12, magnesium and zinc.',
+    mechanism: 'Multiple mechanisms; not fully characterised.',
+    evidence: 'MODERATE',
+    citation:
+      'Observational associations are consistent, but clinical significance ' +
+      'in well-nourished populations is debated. State as an association, not ' +
+      'a deficiency.',
+    fixes: [
+      { cost: 'free', action: 'Worth knowing if you are already eating restrictively.' },
+      { cost: 'free', action: 'Not a reason to change contraception. A reason to be aware.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'statin-coq10',
+    domain: 'medications',
+    requires: ['meds'],
+    fires: (p) => has(p.meds, 'statin'),
+    contradiction:
+      'Statins lower CoQ10 as a direct consequence of how they work.',
+    mechanism:
+      'Statins inhibit HMG-CoA reductase, which sits upstream of both ' +
+      'cholesterol and CoQ10 synthesis.',
+    evidence: 'STRONG for the depletion, WEAK for symptomatic benefit of repletion',
+    citation:
+      'The biochemical depletion is uncontested. Whether supplementing CoQ10 ' +
+      'improves statin-associated muscle symptoms is genuinely disputed — ' +
+      'trials conflict. Do not imply it will fix symptoms.',
+    fixes: [
+      { cost: 'free', action: 'Worth knowing. The evidence that supplementing helps symptoms is mixed.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'winter-no-synthesis',
+    domain: 'geography',
+    requires: ['latBand'],
+    fires: (p) => p.latBand === 'high' && isDarkMonths(),
+    contradiction:
+      'Between October and March at this latitude your skin makes no vitamin ' +
+      'D at all. Not less — none.',
+    mechanism:
+      'UVB at the wavelength required for cutaneous synthesis does not reach ' +
+      'the ground at that solar angle, regardless of how long you spend ' +
+      'outside or how bright the day feels.',
+    evidence: 'STRONG',
+    citation:
+      'Established photobiology; underpins NHS/SACN autumn-winter ' +
+      'supplementation guidance.',
+    fixes: [
+      { cost: 8, action: 'D3 October to March. You genuinely do not need it in July.' },
+      { cost: 'free', action: 'Take it with a meal containing fat.' }
+    ],
+    surprise: 8
+  },
+
+  {
+    id: 'underground-commute',
+    domain: 'geography',
+    requires: ['commuteMode', 'commuteMinutes'],
+    fires: (p) => p.commuteMode === 'underground' && p.commuteMinutes >= 20,
+    contradiction:
+      'You spend a meaningful part of every day in one of the higher ' +
+      'particulate environments you will encounter, and have probably never ' +
+      'thought about it.',
+    mechanism:
+      'Deep-level underground lines carry elevated PM2.5, largely iron oxide ' +
+      'from brake and rail wear, in poorly ventilated tunnels.',
+    evidence: 'MODERATE — VERIFY BEFORE SHIPPING',
+    citation:
+      'Direction is well established but published figures vary and several ' +
+      'widely-cited numbers predate recent air-quality changes. Do not put a ' +
+      'specific multiplier on screen without checking current data.',
+    fixes: [
+      { cost: 'free', action: 'Where the journey allows, overground or bus is a lower-exposure route.' },
+      { cost: 'free', action: 'Do not over-weight this. It is a minor contributor next to sleep and training load.' }
+    ],
+    surprise: 7
+  },
+
+  {
+    id: 'cycling-rush-hour',
+    domain: 'geography',
+    requires: ['commuteMode'],
+    fires: (p) => p.commuteMode === 'cycle',
+    contradiction:
+      'Cycling to work is the best single thing in your profile. Doing it ' +
+      'along an arterial road at 8:15am is the one qualifier.',
+    mechanism:
+      'Exercise raises ventilation rate several-fold, so you inhale ' +
+      'proportionally more of whatever is in the air.',
+    evidence: 'MODERATE',
+    citation:
+      'Ventilation effect is established. Critically, the evidence is ' +
+      'consistent that the benefits of active travel outweigh the pollution ' +
+      'exposure for almost everyone. Frame as route optimisation, never as a ' +
+      'reason to stop.',
+    fixes: [
+      { cost: 'free', action: 'A back-street route one block off the main road cuts exposure substantially.' },
+      { cost: 'free', action: 'Thirty minutes earlier is meaningfully cleaner air.' },
+      { cost: 'free', action: 'Keep cycling. The exercise wins.' }
+    ],
+    surprise: 6
+  },
+
+  {
+    id: 'trained-but-sedentary',
+    domain: 'movement',
+    requires: ['trainingDays', 'sitLongestBlock'],
+    fires: (p) => p.trainingDays >= 3 && p.sitLongestBlock >= 4,
+    contradiction:
+      'You train four times a week and sit for nine hours. The hour of ' +
+      'training does not cancel the eight hours of sitting — they are ' +
+      'independent inputs.',
+    mechanism:
+      'Prolonged uninterrupted sitting affects glucose handling and lipid ' +
+      'metabolism through mechanisms that structured exercise does not fully ' +
+      'reverse.',
+    evidence: 'MODERATE-STRONG',
+    citation:
+      'The "active couch potato" finding is replicated across large cohorts, ' +
+      'though the independence of the effect is still debated.',
+    fixes: [
+      { cost: 'free', action: 'Break the longest block. Two minutes of standing every 30-45 minutes.' },
+      { cost: 'free', action: 'Take calls standing or walking.' }
+    ],
+    surprise: 7
+  }
+
+];
+
+const EVIDENCE_WEIGHT = {
+  'STRONG': 1.0,
+  'MODERATE-STRONG': 0.85,
+  'MODERATE': 0.7,
+  'WEAK': 0.35
+};
+
+const evidenceWeight = (grade) => {
+  const key = Object.keys(EVIDENCE_WEIGHT).find(k => String(grade).startsWith(k));
+  return EVIDENCE_WEIGHT[key] ?? 0.5;
+};
+
+function runContradictions(profile) {
+  const fired = [];
+  const skipped = [];
+  for (const rule of RULES) {
+    const missing = rule.requires.filter(f => profile[f] === undefined || profile[f] === null);
+    if (missing.length) {
+      skipped.push({ id: rule.id, missing });
+      continue;
+    }
+    try {
+      if (rule.fires(profile)) fired.push(rule);
+    } catch (err) {
+      console.error(`[arco] rule ${rule.id} threw`, err);
+    }
+  }
+  return { fired: rank(fired), skipped };
+}
+
+function rank(fired) {
+  return fired
+    .map(r => ({
+      ...r,
+      score: (r.importance ?? 0) >= 9
+        ? 100
+        : (r.surprise ?? 5) * evidenceWeight(r.evidence)
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function selectDaily(fired, alreadyShownIds = []) {
+  return fired.find(r => !alreadyShownIds.includes(r.id)) ?? null;
+}
+
+function nextBestQuestions(profile, limit = 5) {
+  const counts = {};
+  for (const rule of RULES) {
+    for (const field of rule.requires) {
+      if (profile[field] === undefined || profile[field] === null) {
+        counts[field] = (counts[field] ?? 0) + 1;
+      }
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([field, unlocks]) => ({ field, unlocks }));
+}
+
+/* ── FIELD MAPPING: our stored profile → the engine's schema. Existing fields
+   only; anything we don't collect is left absent so runContradictions skips
+   the rules that need it (never guessed). See the mapping report for details. */
+function toContradictionProfile(p){
+  const trainingDaysMap = {'1-2':2, '3-4':4, '5+':5};                 // range → representative count
+  const trainingTimeMap = {morning:7, afternoon:14, evening:20};       // string → 24h decimal
+  const meatMap = {omnivore:'moderate', low_meat:'low', vegetarian:'none', vegan:'none'};
+  const fishMap = {'2plus':'2plus', sometimes:'occasionally', never:'never'};
+  const sunlightMap = {always:'often', sometimes:'sometimes', rarely:'rarely'};
+  const alcoholMap = {none:0, low:2, moderate:5, high:7};              // chip → drinks/week midpoint
+  const medMap = {statins:'statin'};                                   // engine expects singular
+  const stackMap = {vitd:'vitaminD'};                                  // engine expects 'vitaminD'
+  const e = {};
+  if(p.sex!=null) e.sex = p.sex;
+  if(p.stress!=null) e.stress = p.stress;
+  if(p.latBand!=null) e.latBand = p.latBand;
+  if(p.trainingFreq!=null && trainingDaysMap[p.trainingFreq]!=null) e.trainingDays = trainingDaysMap[p.trainingFreq];
+  if(p.trainingTime!=null && trainingTimeMap[p.trainingTime]!=null) e.trainingTime = trainingTimeMap[p.trainingTime];
+  if(p.diet!=null && meatMap[p.diet]!=null) e.meat = meatMap[p.diet];
+  if(p.fish!=null) e.fish = fishMap[p.fish] ?? p.fish;
+  if(p.sunlight!=null) e.sunlight = sunlightMap[p.sunlight] ?? p.sunlight;
+  if(p.alcohol!=null && alcoholMap[p.alcohol]!=null) e.alcoholDrinksPerWeek = alcoholMap[p.alcohol];
+  if(Array.isArray(p.meds)) e.meds = p.meds.map(m => medMap[m] ?? m);
+  if(Array.isArray(p.currentStack)) e.currentStack = p.currentStack.map(s => stackMap[s] ?? s);
+  // Direct pass-throughs once collected (added by later onboarding steps):
+  ['wakeTime','bedTime','lastCoffeeTime','weekendWakeTime','magnesiumForm','morningLight',
+   'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
+   'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours'
+  ].forEach(f => { if(p[f]!=null) e[f]=p[f]; });
+  return e;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { RULES, runContradictions, selectDaily, nextBestQuestions, rank };
+}
+
 // ── SUPPLEMENT TAKEN STATE ──
 const takenToday = JSON.parse(localStorage.getItem('arco-taken-'+new Date().toDateString())||'[]');
 function markTaken(key){
