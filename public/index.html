@@ -94,6 +94,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .login-btn:disabled{opacity:0.55;cursor:default;}
 /* onboarding sign-in link + save-your-protocol card (light theme, on the cream diagnosis card) */
 .ob-signin{background:none;border:none;color:var(--orange);font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;}
+.ob-back{align-self:flex-start;background:none;border:none;color:var(--muted);font-size:12px;font-family:var(--font);letter-spacing:0.03em;cursor:pointer;margin-bottom:16px;padding:0;}
 .save-input{width:100%;padding:14px 16px;border:1px solid var(--sep);border-radius:12px;background:var(--bg);color:var(--ink);font-size:15px;font-family:var(--font);outline:none;text-align:center;margin-bottom:10px;transition:border-color 0.15s;-webkit-appearance:none;}
 .save-input::placeholder{color:var(--muted);}
 .save-input:focus{border-color:var(--orange);}
@@ -430,122 +431,119 @@ function getStreak(ci){
 const steps=[
   {title:'what\'s your name?',sub:'arco uses it to make things feel personal from day one.',
    render:()=>`
-    <input class="field-input" id="f-name" placeholder="your first name" type="text" autocomplete="given-name" style="font-size:22px;padding:18px 16px;font-weight:300;letter-spacing:-0.01em;" value="Cons">
+    <input class="field-input" id="f-name" placeholder="your first name" type="text" autocomplete="given-name" style="font-size:22px;padding:18px 16px;font-weight:300;letter-spacing:-0.01em;" value="${profile.name&&profile.name!=='you'?profile.name:''}">
     <div class="field-label" style="margin-top:8px;">age</div>
-    <input class="field-input" id="f-age" placeholder="e.g. 24" type="number" min="16" max="80" inputmode="numeric">
+    <input class="field-input" id="f-age" placeholder="e.g. 24" type="number" min="16" max="80" inputmode="numeric" value="${profile.age||''}">
     <div class="field-label">biological sex</div>
     <div class="chip-group" id="g-sex">
-      <div class="chip" data-val="male" onclick="selChip(this,'g-sex','ink')">male</div>
-      <div class="chip" data-val="female" onclick="selChip(this,'g-sex','ink')">female</div>
+      <div class="chip${profile.sex==='male'?' sel-ink':''}" data-val="male" onclick="selChip(this,'g-sex','ink')">male</div>
+      <div class="chip${profile.sex==='female'?' sel-ink':''}" data-val="female" onclick="selChip(this,'g-sex','ink')">female</div>
     </div>`,
    save:()=>{profile.name=document.getElementById('f-name').value.trim()||'you';profile.age=parseInt(document.getElementById('f-age').value)||25;profile.sex=getChip('g-sex')||'male';}
   },
   {title:'how do you sleep?',sub:'sleep is the master variable. everything builds from here.',
    render:()=>`
     <div class="field-label">typical wake time</div>
-    <select class="field-select" id="f-wake">${[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===7?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <select class="field-select" id="f-wake">${[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===(profile.wake??7)?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
     <div class="field-label">typical bedtime</div>
-    <select class="field-select" id="f-bed">${[21,21.5,22,22.5,23,23.5,24,0.5,1].map(h=>{const d=h>=24?h-24:h,hh=Math.floor(d),mm=d%1?'30':'00';return`<option value="${h}"${h===23?' selected':''}>${hh.toString().padStart(2,'0')}:${mm}</option>`;}).join('')}</select>
+    <select class="field-select" id="f-bed">${[21,21.5,22,22.5,23,23.5,24,0.5,1].map(h=>{const d=h>=24?h-24:h,hh=Math.floor(d),mm=d%1?'30':'00';return`<option value="${h}"${h===(profile.bed??23)?' selected':''}>${hh.toString().padStart(2,'0')}:${mm}</option>`;}).join('')}</select>
     <div class="field-label">average sleep quality</div>
-    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="3" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">3</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
+    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.sleepQuality??3}" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">${profile.sleepQuality??3}</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
     <div class="field-label">chronotype</div>
     <div class="chip-group" id="g-chrono">
-      <div class="chip" data-val="early" onclick="selChip(this,'g-chrono','ink')">early bird</div>
-      <div class="chip" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
-      <div class="chip" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
+      <div class="chip${profile.chronotype==='early'?' sel-ink':''}" data-val="early" onclick="selChip(this,'g-chrono','ink')">early bird</div>
+      <div class="chip${profile.chronotype==='neutral'?' sel-ink':''}" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
+      <div class="chip${profile.chronotype==='late'?' sel-ink':''}" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
     </div>`,
    save:()=>{profile.wake=parseFloat(document.getElementById('f-wake').value)||7;profile.bed=parseFloat(document.getElementById('f-bed').value)||23;profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;profile.chronotype=getChip('g-chrono')||'neutral';}
   },
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
    render:()=>`
     <div class="field-label">training frequency</div>
-    <div class="chip-group" id="g-freq"><div class="chip" data-val="1-2" onclick="selChip(this,'g-freq','ink')">1–2x / week</div><div class="chip" data-val="3-4" onclick="selChip(this,'g-freq','ink')">3–4x / week</div><div class="chip" data-val="5+" onclick="selChip(this,'g-freq','ink')">5+ / week</div></div>
+    <div class="chip-group" id="g-freq"><div class="chip${profile.trainingFreq==='1-2'?' sel-ink':''}" data-val="1-2" onclick="selChip(this,'g-freq','ink')">1–2x / week</div><div class="chip${profile.trainingFreq==='3-4'?' sel-ink':''}" data-val="3-4" onclick="selChip(this,'g-freq','ink')">3–4x / week</div><div class="chip${profile.trainingFreq==='5+'?' sel-ink':''}" data-val="5+" onclick="selChip(this,'g-freq','ink')">5+ / week</div></div>
     <div class="field-label">typical training time</div>
-    <div class="chip-group" id="g-ttime"><div class="chip" data-val="morning" onclick="selChip(this,'g-ttime','ink')">morning</div><div class="chip" data-val="afternoon" onclick="selChip(this,'g-ttime','ink')">afternoon</div><div class="chip" data-val="evening" onclick="selChip(this,'g-ttime','ink')">evening</div></div>
+    <div class="chip-group" id="g-ttime"><div class="chip${profile.trainingTime==='morning'?' sel-ink':''}" data-val="morning" onclick="selChip(this,'g-ttime','ink')">morning</div><div class="chip${profile.trainingTime==='afternoon'?' sel-ink':''}" data-val="afternoon" onclick="selChip(this,'g-ttime','ink')">afternoon</div><div class="chip${profile.trainingTime==='evening'?' sel-ink':''}" data-val="evening" onclick="selChip(this,'g-ttime','ink')">evening</div></div>
     <div class="field-label">typical stress level</div>
-    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="3" step="1" id="f-stress" oninput="document.getElementById('f-stressv').textContent=this.value"><span class="slider-val" id="f-stressv">3</span></div><div class="slider-labels"><span>low</span><span>high</span></div></div>`,
+    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.stress??3}" step="1" id="f-stress" oninput="document.getElementById('f-stressv').textContent=this.value"><span class="slider-val" id="f-stressv">${profile.stress??3}</span></div><div class="slider-labels"><span>low</span><span>high</span></div></div>`,
    save:()=>{profile.trainingFreq=getChip('g-freq')||'3-4';profile.trainingTime=getChip('g-ttime')||'afternoon';profile.stress=parseInt(document.getElementById('f-stress').value)||3;}
   },
   {title:'how does your work day look?',sub:'your schedule shapes when focus, rest and training are actually possible.',
    render:()=>`
     <div class="field-label">what best describes your work?</div>
     <div class="chip-group" id="g-work">
-      <div class="chip" data-val="banking" onclick="selChip(this,'g-work','ink')">banking / finance</div>
-      <div class="chip" data-val="corporate" onclick="selChip(this,'g-work','ink')">corporate 9–5</div>
-      <div class="chip" data-val="startup" onclick="selChip(this,'g-work','ink')">startup</div>
-      <div class="chip" data-val="creative" onclick="selChip(this,'g-work','ink')">creative / freelance</div>
-      <div class="chip" data-val="student" onclick="selChip(this,'g-work','ink')">student</div>
-      <div class="chip" data-val="founder" onclick="selChip(this,'g-work','ink')">founder</div>
+      <div class="chip${profile.workType==='banking'?' sel-ink':''}" data-val="banking" onclick="selChip(this,'g-work','ink')">banking / finance</div>
+      <div class="chip${profile.workType==='corporate'?' sel-ink':''}" data-val="corporate" onclick="selChip(this,'g-work','ink')">corporate 9–5</div>
+      <div class="chip${profile.workType==='startup'?' sel-ink':''}" data-val="startup" onclick="selChip(this,'g-work','ink')">startup</div>
+      <div class="chip${profile.workType==='creative'?' sel-ink':''}" data-val="creative" onclick="selChip(this,'g-work','ink')">creative / freelance</div>
+      <div class="chip${profile.workType==='student'?' sel-ink':''}" data-val="student" onclick="selChip(this,'g-work','ink')">student</div>
+      <div class="chip${profile.workType==='founder'?' sel-ink':''}" data-val="founder" onclick="selChip(this,'g-work','ink')">founder</div>
     </div>
     <div class="field-label">work starts at</div>
-    <select class="field-select" id="f-wstart">${[6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===9?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <select class="field-select" id="f-wstart">${[6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===(profile.workStart??9)?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
     <div class="field-label">work ends at (typical)</div>
-    <select class="field-select" id="f-wend">${[16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,22,23].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===18?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
+    <select class="field-select" id="f-wend">${[16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,22,23].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===(profile.workEnd??18)?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
     <div class="field-label">do you have any control over your schedule?</div>
     <div class="chip-group" id="g-flex">
-      <div class="chip" data-val="none" onclick="selChip(this,'g-flex','ink')">very little</div>
-      <div class="chip" data-val="some" onclick="selChip(this,'g-flex','ink')">some flexibility</div>
-      <div class="chip" data-val="full" onclick="selChip(this,'g-flex','ink')">fully flexible</div>
+      <div class="chip${profile.flexibility==='none'?' sel-ink':''}" data-val="none" onclick="selChip(this,'g-flex','ink')">very little</div>
+      <div class="chip${profile.flexibility==='some'?' sel-ink':''}" data-val="some" onclick="selChip(this,'g-flex','ink')">some flexibility</div>
+      <div class="chip${profile.flexibility==='full'?' sel-ink':''}" data-val="full" onclick="selChip(this,'g-flex','ink')">fully flexible</div>
     </div>`,
    save:()=>{profile.workType=getChip('g-work')||'corporate';profile.workStart=parseFloat(document.getElementById('f-wstart').value)||9;profile.workEnd=parseFloat(document.getElementById('f-wend').value)||18;profile.flexibility=getChip('g-flex')||'some';}
   },
   {title:'a few last things',sub:'small habits that shift your arc more than most people realise.',
    render:()=>`
     <div class="field-label">caffeine habit</div>
-    <div class="chip-group" id="g-caff"><div class="chip" data-val="none" onclick="selChip(this,'g-caff','ink')">none</div><div class="chip" data-val="morning" onclick="selChip(this,'g-caff','ink')">morning only</div><div class="chip" data-val="afternoon" onclick="selChip(this,'g-caff','ink')">into afternoon</div><div class="chip" data-val="evening" onclick="selChip(this,'g-caff','ink')">evening too</div></div>
+    <div class="chip-group" id="g-caff"><div class="chip${profile.caffeine==='none'?' sel-ink':''}" data-val="none" onclick="selChip(this,'g-caff','ink')">none</div><div class="chip${profile.caffeine==='morning'?' sel-ink':''}" data-val="morning" onclick="selChip(this,'g-caff','ink')">morning only</div><div class="chip${profile.caffeine==='afternoon'?' sel-ink':''}" data-val="afternoon" onclick="selChip(this,'g-caff','ink')">into afternoon</div><div class="chip${profile.caffeine==='evening'?' sel-ink':''}" data-val="evening" onclick="selChip(this,'g-caff','ink')">evening too</div></div>
     <div class="field-label">primary goal</div>
-    <div class="chip-group" id="g-goal"><div class="chip" data-val="performance" onclick="selChip(this,'g-goal','ink')">performance</div><div class="chip" data-val="recovery" onclick="selChip(this,'g-goal','ink')">recovery</div><div class="chip" data-val="focus" onclick="selChip(this,'g-goal','ink')">deep focus</div><div class="chip" data-val="sleep" onclick="selChip(this,'g-goal','ink')">better sleep</div></div>
+    <div class="chip-group" id="g-goal"><div class="chip${profile.goal==='performance'?' sel-ink':''}" data-val="performance" onclick="selChip(this,'g-goal','ink')">performance</div><div class="chip${profile.goal==='recovery'?' sel-ink':''}" data-val="recovery" onclick="selChip(this,'g-goal','ink')">recovery</div><div class="chip${profile.goal==='focus'?' sel-ink':''}" data-val="focus" onclick="selChip(this,'g-goal','ink')">deep focus</div><div class="chip${profile.goal==='sleep'?' sel-ink':''}" data-val="sleep" onclick="selChip(this,'g-goal','ink')">better sleep</div></div>
     <div class="field-label">morning sunlight?</div>
-    <div class="chip-group" id="g-sun"><div class="chip" data-val="always" onclick="selChip(this,'g-sun','ink')">always</div><div class="chip" data-val="sometimes" onclick="selChip(this,'g-sun','ink')">sometimes</div><div class="chip" data-val="rarely" onclick="selChip(this,'g-sun','ink')">rarely</div></div>`,
+    <div class="chip-group" id="g-sun"><div class="chip${profile.sunlight==='always'?' sel-ink':''}" data-val="always" onclick="selChip(this,'g-sun','ink')">always</div><div class="chip${profile.sunlight==='sometimes'?' sel-ink':''}" data-val="sometimes" onclick="selChip(this,'g-sun','ink')">sometimes</div><div class="chip${profile.sunlight==='rarely'?' sel-ink':''}" data-val="rarely" onclick="selChip(this,'g-sun','ink')">rarely</div></div>`,
    save:()=>{profile.caffeine=getChip('g-caff')||'morning';profile.goal=getChip('g-goal')||'performance';profile.sunlight=getChip('g-sun')||'sometimes';}
   },
   {title:'last few things',sub:'these inputs directly determine your personalised protocol.',
    render:()=>`
     <div class="field-label">diet</div>
     <div class="chip-group" id="g-diet">
-      <div class="chip" data-val="omnivore" onclick="selChip(this,'g-diet','ink')">everything</div>
-      <div class="chip" data-val="low_meat" onclick="selChip(this,'g-diet','ink')">low meat</div>
-      <div class="chip" data-val="vegetarian" onclick="selChip(this,'g-diet','ink')">vegetarian</div>
-      <div class="chip" data-val="vegan" onclick="selChip(this,'g-diet','ink')">vegan</div>
+      <div class="chip${profile.diet==='omnivore'?' sel-ink':''}" data-val="omnivore" onclick="selChip(this,'g-diet','ink')">everything</div>
+      <div class="chip${profile.diet==='low_meat'?' sel-ink':''}" data-val="low_meat" onclick="selChip(this,'g-diet','ink')">low meat</div>
+      <div class="chip${profile.diet==='vegetarian'?' sel-ink':''}" data-val="vegetarian" onclick="selChip(this,'g-diet','ink')">vegetarian</div>
+      <div class="chip${profile.diet==='vegan'?' sel-ink':''}" data-val="vegan" onclick="selChip(this,'g-diet','ink')">vegan</div>
     </div>
     <div class="field-label">oily fish (salmon, mackerel, sardines)</div>
     <div class="chip-group" id="g-fish">
-      <div class="chip" data-val="2plus" onclick="selChip(this,'g-fish','ink')">2+ times/week</div>
-      <div class="chip" data-val="sometimes" onclick="selChip(this,'g-fish','ink')">occasionally</div>
-      <div class="chip" data-val="never" onclick="selChip(this,'g-fish','ink')">never</div>
+      <div class="chip${profile.fish==='2plus'?' sel-ink':''}" data-val="2plus" onclick="selChip(this,'g-fish','ink')">2+ times/week</div>
+      <div class="chip${profile.fish==='sometimes'?' sel-ink':''}" data-val="sometimes" onclick="selChip(this,'g-fish','ink')">occasionally</div>
+      <div class="chip${profile.fish==='never'?' sel-ink':''}" data-val="never" onclick="selChip(this,'g-fish','ink')">never</div>
     </div>
     <div class="field-label">alcohol</div>
     <div class="chip-group" id="g-alcohol">
-      <div class="chip" data-val="none" onclick="selChip(this,'g-alcohol','ink')">none</div>
-      <div class="chip" data-val="low" onclick="selChip(this,'g-alcohol','ink')">1–3 drinks/week</div>
-      <div class="chip" data-val="moderate" onclick="selChip(this,'g-alcohol','ink')">4–7/week</div>
-      <div class="chip" data-val="high" onclick="selChip(this,'g-alcohol','ink')">daily</div>
+      <div class="chip${profile.alcohol==='none'?' sel-ink':''}" data-val="none" onclick="selChip(this,'g-alcohol','ink')">none</div>
+      <div class="chip${profile.alcohol==='low'?' sel-ink':''}" data-val="low" onclick="selChip(this,'g-alcohol','ink')">1–3 drinks/week</div>
+      <div class="chip${profile.alcohol==='moderate'?' sel-ink':''}" data-val="moderate" onclick="selChip(this,'g-alcohol','ink')">4–7/week</div>
+      <div class="chip${profile.alcohol==='high'?' sel-ink':''}" data-val="high" onclick="selChip(this,'g-alcohol','ink')">daily</div>
     </div>
     <div class="field-label">any of these?</div>
     <div class="chip-group" id="g-meds">
-      <div class="chip" data-val="metformin" onclick="toggleChipSup(this)">metformin</div>
-      <div class="chip" data-val="ppi" onclick="toggleChipSup(this)">PPIs / antacids</div>
-      <div class="chip" data-val="statins" onclick="toggleChipSup(this)">statins</div>
-      <div class="chip" data-val="warfarin" onclick="toggleChipSup(this)">warfarin</div>
+      <div class="chip${(profile.meds||[]).includes('metformin')?' sel-ink':''}" data-val="metformin" onclick="toggleChipSup(this)">metformin</div>
+      <div class="chip${(profile.meds||[]).includes('ppi')?' sel-ink':''}" data-val="ppi" onclick="toggleChipSup(this)">PPIs / antacids</div>
+      <div class="chip${(profile.meds||[]).includes('statins')?' sel-ink':''}" data-val="statins" onclick="toggleChipSup(this)">statins</div>
+      <div class="chip${(profile.meds||[]).includes('warfarin')?' sel-ink':''}" data-val="warfarin" onclick="toggleChipSup(this)">warfarin</div>
       <div class="chip" data-val="none" onclick="toggleChipSup(this)">none</div>
     </div>`,
    save:()=>{
      profile.diet=getChip('g-diet')||'omnivore';
      profile.fish=getChip('g-fish')||'sometimes';
      profile.alcohol=getChip('g-alcohol')||'low';
-     profile.meds=[...document.querySelectorAll('#g-meds .sel-ink')].map(c=>c.dataset.val);
-     profile.caffeine='morning';
-     profile.goal='performance';
-     profile.sunlight='sometimes';
+     profile.meds=[...document.querySelectorAll('#g-meds .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');
    }
   },
   {title:'what do you take now?',sub:'so arco can fix timing and form, not just tell you what to start.',
    render:()=>`
     <div class="chip-group" id="g-stack">
-      ${Object.values(SUPPLEMENT_DB.supplements).map(s=>`<div class="chip" data-val="${s.id}" onclick="toggleChipSup(this);document.getElementById('chip-stack-none').classList.remove('sel-ink')">${s.name}</div>`).join('')}
+      ${Object.values(SUPPLEMENT_DB.supplements).map(s=>`<div class="chip${(profile.currentStack||[]).includes(s.id)?' sel-ink':''}" data-val="${s.id}" onclick="toggleChipSup(this);document.getElementById('chip-stack-none').classList.remove('sel-ink')">${s.name}</div>`).join('')}
     </div>
     <div class="chip-group" style="margin-top:4px;">
-      <div class="chip" id="chip-stack-none" data-val="none" onclick="document.querySelectorAll('#g-stack .sel-ink').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink')">nothing yet</div>
+      <div class="chip${Array.isArray(profile.currentStack)&&profile.currentStack.length===0?' sel-ink':''}" id="chip-stack-none" data-val="none" onclick="document.querySelectorAll('#g-stack .sel-ink').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink')">nothing yet</div>
     </div>`,
    save:()=>{profile.currentStack=[...document.querySelectorAll('#g-stack .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');}
   }
@@ -564,13 +562,14 @@ function renderStep(){
   const step=steps[currentStep];
   const dots=steps.map((_,i)=>`<div class="step-dot${i<currentStep?' done':i===currentStep?' active':''}"></div>`).join('');
   document.getElementById('ob-body').innerHTML=`
+    ${(currentStep>0||_redoMode)?`<button class="ob-back" onclick="prevStep()">&larr; back</button>`:''}
     <div class="step-bar">${dots}</div>
     <div class="step-title">${step.title}</div>
     <div class="step-sub">${step.sub}</div>
     ${step.render()}
     <div style="flex:1;min-height:16px;"></div>
     <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>
-    ${currentStep===0?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}`;
+    ${currentStep===0&&!_redoMode?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}`;
 }
 window.nextStep=function(){
   steps[currentStep].save();currentStep++;
@@ -579,10 +578,37 @@ window.nextStep=function(){
     try{ profile.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ profile.timezone = null; }
     profile.latBand = deriveLatBand(profile.timezone);
     localStorage.setItem('arco-profile',JSON.stringify(profile));
+    _redoMode = false; _profileSnapshot = null;   // changes committed; drop the redo snapshot
     showLoading();
   }
   else renderStep();
 };
+
+// ── REDO ONBOARDING (from the Profile tab) — edits the profile ONLY. daily_logs /
+// supplement_taken and the local streak/history are never touched. Existing answers are
+// prefilled because every step's render() now reads from `profile`.
+let _redoMode = false;
+let _profileSnapshot = null;
+window.showRedoConfirm = function(){ document.getElementById('redo-confirm').style.display='block'; document.getElementById('redo-btn').style.display='none'; };
+window.hideRedoConfirm = function(){ document.getElementById('redo-confirm').style.display='none'; document.getElementById('redo-btn').style.display='block'; };
+window.startRedo = function(){
+  _redoMode = true;
+  _profileSnapshot = JSON.parse(JSON.stringify(profile)); // to restore if they exit partway
+  currentStep = 0;
+  showScreen('screen-onboard');
+  renderStep();
+};
+// Back arrow: previous step, or (on step 0 during a redo) exit without saving changes.
+window.prevStep = function(){
+  if(currentStep > 0){ steps[currentStep].save(); currentStep--; renderStep(); }
+  else if(_redoMode){ exitRedo(); }
+};
+function exitRedo(){
+  if(_profileSnapshot) profile = _profileSnapshot; // discard any in-progress edits
+  _redoMode = false; _profileSnapshot = null;
+  try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
+  showScreen('screen-dash'); showProfileTab();     // back to where they started
+}
 
 function showLoading(){
   showScreen('screen-loading');
@@ -924,6 +950,10 @@ function showDiagnosis(){
 
     ${stackExtrasHTML(diagnosis)}
 
+    ${currentUser ? `
+    <!-- Already signed in (e.g. a redo) — profile is already saved to Supabase; just continue. -->
+    <button onclick="buildDash()" style="width:100%;padding:16px;border-radius:14px;border:none;background:var(--ink);color:#EDE9E1;font-size:15px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:20px;">view my daily protocol →</button>
+    ` : `
     <!-- SAVE YOUR PROTOCOL (email OTP; on verify, routeUser saves the local profile + goes to dashboard) -->
     <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:12px;">
       <div style="font-size:16px;font-weight:500;color:var(--ink);margin-bottom:4px;">save your protocol</div>
@@ -941,8 +971,8 @@ function showDiagnosis(){
         <button class="save-resend" id="save-resend" onclick="resendCode('save')">resend code</button>
       </div>
     </div>
-
     <button onclick="buildDash()" style="width:100%;padding:14px;border:none;background:none;color:var(--muted);font-size:13px;font-family:var(--font);cursor:pointer;margin-bottom:20px;">continue without saving →</button>
+    `}
   `;
 }
 
@@ -1525,6 +1555,19 @@ function showProfileTab(){
       <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">${p.name||'Cons'}</div>
     </div>
     <div style="background:var(--card);border-radius:var(--radius);padding:4px 18px;margin-bottom:16px;">${rows}</div>
+
+    <button id="redo-btn" onclick="showRedoConfirm()"
+      style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--ink);font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:10px;">
+      redo onboarding
+    </button>
+    <div id="redo-confirm" style="display:none;background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;">
+      <div style="font-size:13px;color:var(--ink);line-height:1.55;margin-bottom:14px;">this will rebuild your protocol — your logged history stays</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="startRedo()" style="flex:1;padding:12px;border-radius:12px;border:none;background:var(--ink);color:#EDE9E1;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;">rebuild</button>
+        <button onclick="hideRedoConfirm()" style="flex:1;padding:12px;border-radius:12px;border:0.5px solid var(--sep);background:transparent;color:var(--muted);font-size:13px;font-family:var(--font);cursor:pointer;">cancel</button>
+      </div>
+    </div>
+
     <button onclick="arcoSignOut()"
       style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--muted);font-size:13px;font-family:var(--font);cursor:pointer;margin-bottom:20px;">
       sign out
