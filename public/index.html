@@ -443,10 +443,6 @@ const steps=[
   },
   {title:'how do you sleep?',sub:'sleep is the master variable. everything builds from here.',
    render:()=>`
-    <div class="field-label">typical wake time</div>
-    <select class="field-select" id="f-wake">${[5,5.5,6,6.5,7,7.5,8,8.5,9,9.5,10].map(h=>{const hh=Math.floor(h),mm=h%1?'30':'00';return`<option value="${h}"${h===(profile.wake??7)?' selected':''}>${hh}:${mm}</option>`;}).join('')}</select>
-    <div class="field-label">typical bedtime</div>
-    <select class="field-select" id="f-bed">${[21,21.5,22,22.5,23,23.5,24,0.5,1].map(h=>{const d=h>=24?h-24:h,hh=Math.floor(d),mm=d%1?'30':'00';return`<option value="${h}"${h===(profile.bed??23)?' selected':''}>${hh.toString().padStart(2,'0')}:${mm}</option>`;}).join('')}</select>
     <div class="field-label">average sleep quality</div>
     <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.sleepQuality??3}" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">${profile.sleepQuality??3}</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
     <div class="field-label">chronotype</div>
@@ -455,7 +451,31 @@ const steps=[
       <div class="chip${profile.chronotype==='neutral'?' sel-ink':''}" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
       <div class="chip${profile.chronotype==='late'?' sel-ink':''}" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
     </div>`,
-   save:()=>{profile.wake=parseFloat(document.getElementById('f-wake').value)||7;profile.bed=parseFloat(document.getElementById('f-bed').value)||23;profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;profile.chronotype=getChip('g-chrono')||'neutral';}
+   save:()=>{profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;profile.chronotype=getChip('g-chrono')||'neutral';}
+  },
+  {title:'your day',sub:'timing is the highest-leverage thing we can fix. give us your real times.',
+   render:()=>{
+     const toHM=d=>d==null?'':String(Math.floor(d)).padStart(2,'0')+':'+String(Math.round((d-Math.floor(d))*60)).padStart(2,'0');
+     const wake=profile.wakeTime??profile.wake, bed=profile.bedTime??profile.bed;
+     const noCoffee=('lastCoffeeTime' in profile) && profile.lastCoffeeTime===null;
+     return `
+    <div class="field-label">typical wake time</div>
+    <input class="field-input" id="f-waketime" type="time" value="${toHM(wake)}">
+    <div class="field-label">typical bedtime</div>
+    <input class="field-input" id="f-bedtime" type="time" value="${toHM(bed)}">
+    <div class="field-label">last coffee of the day</div>
+    <input class="field-input" id="f-coffee" type="time" value="${noCoffee?'':toHM(profile.lastCoffeeTime)}"${noCoffee?' disabled':''}>
+    <div class="chip-group" id="g-nocoffee">
+      <div class="chip${noCoffee?' sel-ink':''}" data-val="none" onclick="toggleChipSup(this);document.getElementById('f-coffee').disabled=this.classList.contains('sel-ink')">I don't drink coffee</div>
+    </div>`;
+   },
+   save:()=>{
+     const toDec=v=>{if(!v)return null;const a=v.split(':').map(Number);return a[0]+(a[1]||0)/60;};
+     const wt=toDec(document.getElementById('f-waketime').value), bt=toDec(document.getElementById('f-bedtime').value);
+     if(wt!=null){profile.wakeTime=wt;profile.wake=wt;}
+     if(bt!=null){profile.bedTime=bt;profile.bed=bt;}
+     profile.lastCoffeeTime=document.querySelector('#g-nocoffee .sel-ink')?null:toDec(document.getElementById('f-coffee').value);
+   }
   },
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
    render:()=>`
@@ -540,12 +560,23 @@ const steps=[
   {title:'what do you take now?',sub:'so arco can fix timing and form, not just tell you what to start.',
    render:()=>`
     <div class="chip-group" id="g-stack">
-      ${Object.values(SUPPLEMENT_DB.supplements).map(s=>`<div class="chip${(profile.currentStack||[]).includes(s.id)?' sel-ink':''}" data-val="${s.id}" onclick="toggleChipSup(this);document.getElementById('chip-stack-none').classList.remove('sel-ink')">${s.name}</div>`).join('')}
+      ${Object.values(SUPPLEMENT_DB.supplements).map(s=>`<div class="chip${(profile.currentStack||[]).includes(s.id)?' sel-ink':''}" data-val="${s.id}" onclick="toggleChipSup(this);document.getElementById('chip-stack-none').classList.remove('sel-ink')${s.id==='magnesium'?';updateMagForm()':''}">${s.name}</div>`).join('')}
     </div>
     <div class="chip-group" style="margin-top:4px;">
-      <div class="chip${Array.isArray(profile.currentStack)&&profile.currentStack.length===0?' sel-ink':''}" id="chip-stack-none" data-val="none" onclick="document.querySelectorAll('#g-stack .sel-ink').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink')">nothing yet</div>
+      <div class="chip${Array.isArray(profile.currentStack)&&profile.currentStack.length===0?' sel-ink':''}" id="chip-stack-none" data-val="none" onclick="document.querySelectorAll('#g-stack .sel-ink').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink');updateMagForm()">nothing yet</div>
+    </div>
+    <div id="mag-form-section" style="display:${(profile.currentStack||[]).includes('magnesium')?'block':'none'};margin-top:20px;">
+      <div class="field-label">which magnesium?</div>
+      <div class="chip-group" id="g-magform">
+        ${['oxide','glycinate','citrate','threonate'].map(f=>`<div class="chip${profile.magnesiumForm===f?' sel-ink':''}" data-val="${f}" onclick="selChip(this,'g-magform','ink')">${f}</div>`).join('')}
+        <div class="chip${profile.magnesiumForm==='unknown'?' sel-ink':''}" data-val="unknown" onclick="selChip(this,'g-magform','ink')">not sure</div>
+      </div>
     </div>`,
-   save:()=>{profile.currentStack=[...document.querySelectorAll('#g-stack .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');}
+   save:()=>{
+     profile.currentStack=[...document.querySelectorAll('#g-stack .sel-ink')].map(c=>c.dataset.val).filter(v=>v!=='none');
+     if(profile.currentStack.includes('magnesium')) profile.magnesiumForm=getChip('g-magform')||'unknown';
+     else delete profile.magnesiumForm;
+   }
   }
 ];
 
@@ -556,6 +587,12 @@ window.selChip=function(el,groupId,style){
 };
 window.toggleChipSup=function(el){
   el.classList.toggle('sel-ink');
+};
+// Reveal the magnesium-form question only while magnesium is in the stack.
+window.updateMagForm=function(){
+  const mag=document.querySelector('#g-stack .chip[data-val="magnesium"]');
+  const sec=document.getElementById('mag-form-section');
+  if(sec) sec.style.display=(mag&&mag.classList.contains('sel-ink'))?'block':'none';
 };
 
 function renderStep(){
@@ -2425,6 +2462,9 @@ function toContradictionProfile(p){
   if(p.alcohol!=null && alcoholMap[p.alcohol]!=null) e.alcoholDrinksPerWeek = alcoholMap[p.alcohol];
   if(Array.isArray(p.meds)) e.meds = p.meds.map(m => medMap[m] ?? m);
   if(Array.isArray(p.currentStack)) e.currentStack = p.currentStack.map(s => stackMap[s] ?? s);
+  // Fallback: the legacy sleep-step fields feed the engine's wakeTime/bedTime.
+  if(e.wakeTime==null && p.wake!=null) e.wakeTime = p.wake;
+  if(e.bedTime==null && p.bed!=null) e.bedTime = p.bed;
   // Direct pass-throughs once collected (added by later onboarding steps):
   ['wakeTime','bedTime','lastCoffeeTime','weekendWakeTime','magnesiumForm','morningLight',
    'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
