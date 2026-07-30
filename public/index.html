@@ -335,7 +335,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   <div class="modal-title" id="ci-question-title">today's question</div>
   <div class="modal-sub" id="ci-question-sub"></div>
   <div id="ci-question-body"></div>
-  <button class="btn btn-ink" style="margin-top:20px;" onclick="submitCheckin()">log it →</button>
+  <button class="btn btn-ink" id="ci-action-btn" style="margin-top:20px;" onclick="submitCheckin()">log it →</button>
 </div>
 
 </div>
@@ -1054,6 +1054,8 @@ function buildDash(){
 
     ${buildProtocolCard(h, profile)}
 
+    ${dailyContradictionCard()}
+
     <div class="now-card" style="margin-bottom:12px;">
       <div class="now-window-label">open window</div>
       <div class="now-window-time">${windowTimeStr(h, profile)}</div>
@@ -1407,125 +1409,169 @@ function buildSchedule(h,p){
 }
 
 // ── ROTATING DAILY QUESTIONS ──
+// Daily check-in questions acquire the remaining engine fields. Each maps to a profile
+// field; toProfile() converts the raw answer to the typed value the engine expects.
 const DAILY_QUESTIONS = [
-  {
-    key:'sleep', type:'slider', min:1, max:5,
-    title:'How did you sleep last night?',
-    sub:'Sleep is the variable everything else builds from.',
-    labels:['terrible','excellent'],
-    default:3
-  },
-  {
-    key:'energy', type:'chips',
-    title:'How is your energy right now?',
-    sub:'Rate honestly — not how you think it should be.',
-    options:['very low','low','okay','good','high'],
-    vals:['1','2','3','4','5']
-  },
-  {
-    key:'focus', type:'chips',
-    title:'How clear was your thinking this morning?',
-    sub:'Focus quality is a direct proxy for sleep and magnesium status.',
-    options:['scattered','unfocused','okay','sharp','very sharp'],
-    vals:['1','2','3','4','5']
-  },
-  {
-    key:'trained', type:'chips',
-    title:'Did you train today?',
-    sub:'Training timing affects your hormone curve for the next 16 hours.',
-    options:['yes','not yet','rest day'],
-    vals:['yes','no','rest']
-  },
-  {
-    key:'stress', type:'slider', min:1, max:5,
-    title:'What is your stress level today?',
-    sub:'Cortisol promotes magnesium wasting — this calibrates your protocol.',
-    labels:['calm','high'],
-    default:2
-  },
-  {
-    key:'crash', type:'chips',
-    title:'Did you have an afternoon energy crash?',
-    sub:'A crash between 13:00–15:00 is biological. A crash at other times signals something else.',
-    options:['yes, hard','slight dip','no crash'],
-    vals:['hard','slight','none']
-  },
-  {
-    key:'sleep_onset', type:'chips',
-    title:'How long did it take you to fall asleep last night?',
-    sub:'Sleep onset over 20 minutes signals cortisol or magnesium issues.',
-    options:['under 10 min','10–20 min','20–45 min','over 45 min'],
-    vals:['fast','normal','slow','very slow']
-  }
+  { field:'morningLight', type:'chips',
+    title:'Did you get outside within an hour of waking?',
+    sub:'Morning light is the primary signal that sets your body clock for the day.',
+    options:['yes','no'], vals:['yes','no'], toProfile:a=>a==='yes' },
+  { field:'proteinBreakfast', type:'chips',
+    title:'Did you have protein at breakfast?',
+    sub:'Protein distribution across the day drives repair, not just the daily total.',
+    options:['yes','no'], vals:['yes','no'], toProfile:a=>a==='yes' },
+  { field:'weekendWakeTime', type:'time',
+    title:'What time do you wake at the weekend?',
+    sub:'A lie-in of 2+ hours gives you jet lag every Saturday.',
+    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
+  { field:'screensBeforeBed', type:'chips',
+    title:'Screen time in the last hour before bed?',
+    sub:'Cognitive arousal keeps you wired when you need to wind down.',
+    options:['none','under 30 min','30 to 60 min','the whole hour'], vals:['0','15','45','60'], toProfile:a=>parseInt(a) },
+  { field:'sleepLatency', type:'chips',
+    title:'How long does it take you to fall asleep?',
+    sub:'Onset over 20 minutes often points to caffeine, stress or magnesium.',
+    options:['under 10 min','10 to 20 min','20 to 45 min','over 45 min'], vals:['5','15','30','50'], toProfile:a=>parseInt(a) },
+  { field:'nightWakings', type:'chips',
+    title:'How many times do you wake in the night?',
+    sub:'Fragmented sleep late in the night is often alcohol or late eating.',
+    options:['none','once','twice','three or more'], vals:['0','1','2','3'], toProfile:a=>parseInt(a) },
+  { field:'eatingWindowEnd', type:'time',
+    title:'When do you usually finish eating?',
+    sub:'Eating close to bed keeps core temperature up when it needs to fall.',
+    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
+  { field:'sitLongestBlock', type:'chips',
+    title:'Longest stretch you sit without getting up?',
+    sub:'Uninterrupted sitting has effects that training does not fully undo.',
+    options:['under 2h','2 to 4h','4 to 6h','6h or more'], vals:['1','3','5','7'], toProfile:a=>parseInt(a) },
+  { field:'commuteMode', type:'chips',
+    title:'How do you usually get to work?',
+    sub:'Your commute is a daily exposure you have probably never weighed.',
+    options:['underground','overground','cycle','walk','car','I work from home'], vals:['underground','overground','cycle','walk','car','none'], toProfile:a=>a },
+  { field:'commuteMinutes', type:'chips',
+    title:'How long is your commute, each way?',
+    sub:'',
+    options:['under 15 min','15 to 30 min','30 to 45 min','45 min or more'], vals:['10','22','37','50'], toProfile:a=>parseInt(a) },
+  { field:'alcoholTiming', type:'chips',
+    title:'When do you usually drink?',
+    sub:'For sleep, timing matters more than amount. A late drink is why you wake at 4am.',
+    options:['with dinner','later in the evening','it varies','I do not drink'], vals:['with-dinner','late','varies','none'], toProfile:a=>a==='none'?null:a }
 ];
 
 let currentQuestion = null;
 let currentQAnswer = null;
 
-function getTodayQuestion(){
-  // Rotate by day of year so it changes daily, never the same two days running
-  const doy = Math.floor((new Date() - new Date(new Date().getFullYear(),0,0)) / 86400000);
-  return DAILY_QUESTIONS[doy % DAILY_QUESTIONS.length];
+// Ask the unanswered field that would unlock the most rules next.
+function getNextQuestion(){
+  const eng = toContradictionProfile(profile);
+  const ranked = nextBestQuestions(eng, 30);
+  for(const {field} of ranked){
+    const q = DAILY_QUESTIONS.find(x=>x.field===field);
+    if(q && (profile[field]===undefined || profile[field]===null)) return q;
+  }
+  return DAILY_QUESTIONS.find(x=>profile[x.field]===undefined || profile[x.field]===null) || DAILY_QUESTIONS[0];
+}
+
+// Evidence badge (same treatment as the diagnosis evidence badges) + shared contradiction body.
+function evidenceGrade(ev){
+  const s=String(ev);
+  const label=['MODERATE-STRONG','STRONG','MODERATE','WEAK'].find(x=>s.startsWith(x))||'MODERATE';
+  const color=label==='STRONG'?'#4BB87B':label==='WEAK'?'rgba(26,22,18,0.3)':'rgba(26,22,18,0.45)';
+  return {label,color};
+}
+function contradictionInner(r){
+  const g=evidenceGrade(r.evidence);
+  const fixes=[...r.fixes].sort((a,b)=>{const av=a.cost==='free'?-1:a.cost,bv=b.cost==='free'?-1:b.cost;return av-bv;});
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">the contradiction</div>
+      <span style="font-size:9px;color:${g.color};border:0.5px solid ${g.color};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;flex-shrink:0;">${g.label}</span>
+    </div>
+    <div style="font-size:15px;font-weight:500;color:var(--ink);line-height:1.5;margin-bottom:10px;">${r.contradiction}</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${r.mechanism}</div>
+    <div style="display:flex;flex-direction:column;gap:9px;">
+      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.5;">${f.action}</span></div>`).join('')}
+    </div>`;
+}
+
+// One contradiction on the Today tab, rotating daily. Shown ids tracked in localStorage.
+function dailyContradictionCard(){
+  let fired;
+  try{ fired = runContradictions(toContradictionProfile(profile)).fired; }catch(e){ return ''; }
+  if(!fired || !fired.length) return '';
+  const today = new Date().toDateString();
+  let shown=[]; try{ shown=JSON.parse(localStorage.getItem('arco-contradictions-shown')||'[]'); }catch(e){}
+  let rec=null; try{ rec=JSON.parse(localStorage.getItem('arco-contradiction-today')||'null'); }catch(e){}
+  let pick = (rec && rec.date===today) ? fired.find(r=>r.id===rec.id) : null;
+  if(!pick){
+    pick = selectDaily(fired, shown) || selectDaily(fired, []) || fired[0];
+    shown = [...new Set([...shown, pick.id])];
+    try{ localStorage.setItem('arco-contradictions-shown', JSON.stringify(shown)); }catch(e){}
+    try{ localStorage.setItem('arco-contradiction-today', JSON.stringify({date:today, id:pick.id})); }catch(e){}
+  }
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;">${contradictionInner(pick)}</div>`;
 }
 
 window.openCheckin = function(){
-  currentQuestion = getTodayQuestion();
+  currentQuestion = getNextQuestion();
   currentQAnswer = null;
-  document.getElementById('ci-question-title').textContent = currentQuestion.title;
-  document.getElementById('ci-question-sub').textContent = currentQuestion.sub;
-
+  const q = currentQuestion;
+  document.getElementById('ci-question-title').textContent = q.title;
+  document.getElementById('ci-question-sub').textContent = q.sub || '';
+  const btn = document.getElementById('ci-action-btn');
+  btn.textContent = 'log it →'; btn.setAttribute('onclick','submitCheckin()');
   let body = '';
-  if(currentQuestion.type === 'slider'){
-    body = `<div class="slider-wrap" style="margin-top:8px;">
-      <div class="slider-row">
-        <input type="range" min="${currentQuestion.min}" max="${currentQuestion.max}" value="${currentQuestion.default}" step="1"
-          id="ci-slider" oninput="currentQAnswer=this.value;document.getElementById('ci-sv').textContent=this.value">
-        <span class="slider-val" id="ci-sv">${currentQuestion.default}</span>
-      </div>
-      <div class="slider-labels"><span>${currentQuestion.labels[0]}</span><span>${currentQuestion.labels[1]}</span></div>
-    </div>`;
-    currentQAnswer = String(currentQuestion.default);
+  if(q.type === 'time'){
+    body = `<input class="field-input" id="ci-time" type="time" style="text-align:center;font-size:22px;" oninput="currentQAnswer=this.value">`;
+  } else if(q.type === 'slider'){
+    body = `<div class="slider-wrap" style="margin-top:8px;"><div class="slider-row"><input type="range" min="${q.min}" max="${q.max}" value="${q.default}" step="1" id="ci-slider" oninput="currentQAnswer=this.value;document.getElementById('ci-sv').textContent=this.value"><span class="slider-val" id="ci-sv">${q.default}</span></div><div class="slider-labels"><span>${q.labels[0]}</span><span>${q.labels[1]}</span></div></div>`;
+    currentQAnswer = String(q.default);
   } else {
-    body = `<div class="chip-group" style="margin-top:8px;">
-      ${currentQuestion.options.map((opt,i)=>`
-        <div class="chip" data-val="${currentQuestion.vals[i]}"
-          onclick="currentQAnswer='${currentQuestion.vals[i]}';document.querySelectorAll('#ci-chips .chip').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink');">
-          ${opt}
-        </div>`).join('')}
-    </div>`;
-    body = `<div id="ci-chips">${body.trim()}</div>`;
+    body = `<div id="ci-chips"><div class="chip-group" style="margin-top:8px;">${q.options.map((opt,i)=>`<div class="chip" data-val="${q.vals[i]}" onclick="currentQAnswer='${q.vals[i]}';document.querySelectorAll('#ci-chips .chip').forEach(c=>c.classList.remove('sel-ink'));this.classList.add('sel-ink');">${opt}</div>`).join('')}</div></div>`;
   }
   document.getElementById('ci-question-body').innerHTML = body;
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('checkin-modal').classList.add('open');
-  document.body.style.overflow = 'hidden';   // lock background scroll while sheet is open
+  document.body.style.overflow = 'hidden';
 };
 
 window.closeCheckin = function(){
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('checkin-modal').classList.remove('open');
-  document.body.style.overflow = '';         // restore scroll
+  document.body.style.overflow = '';
 };
 
 window.submitCheckin = function(){
-  if(!currentQAnswer) currentQAnswer = currentQuestion.default || currentQuestion.vals?.[0] || '3';
+  const q = currentQuestion;
+  if(currentQAnswer==null || currentQAnswer==='') currentQAnswer = q.vals ? q.vals[0] : (q.default!=null?String(q.default):'');
+  // Snapshot which contradictions are already firing, to detect a newly-unlocked one.
+  let before=[]; try{ before = runContradictions(toContradictionProfile(profile)).fired.map(r=>r.id); }catch(e){}
+  // Store the typed value onto the profile.
+  profile[q.field] = q.toProfile ? q.toProfile(currentQAnswer) : currentQAnswer;
+  try{ localStorage.setItem('arco-profile',JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote();
+  // Keep writing answers to daily_logs (+ local checkins for the streak).
   const today = new Date().toDateString();
-  const entry = {date:today, key:currentQuestion.key, value:currentQAnswer};
-  if(!checkins.find(c=>c.date===today)){
-    checkins.push(entry);
-    try{localStorage.setItem('arco-checkins',JSON.stringify(checkins));}catch(e){}
+  if(!checkins.find(c=>c.date===today && c.key===q.field)){
+    checkins.push({date:today, key:q.field, value:String(currentQAnswer)});
+    try{ localStorage.setItem('arco-checkins',JSON.stringify(checkins)); }catch(e){}
   }
-  saveCheckinRemote(currentQuestion.key, currentQAnswer);
-  // Update profile stress/sleep for arc calculations
-  if(currentQuestion.key==='sleep') profile.sleepQuality = parseInt(currentQAnswer)||3;
-  if(currentQuestion.key==='stress') profile.stress = parseInt(currentQAnswer)||3;
-  if(currentQuestion.key==='sleep'||currentQuestion.key==='stress'){
-    try{localStorage.setItem('arco-profile',JSON.stringify(profile));}catch(e){}
-    saveProfileRemote();
-  }
-  closeCheckin();
-  buildDash();
+  saveCheckinRemote(q.field, String(currentQAnswer));
+  // Immediate payout: if that answer unlocked a new contradiction, show it right now.
+  let after=[]; try{ after = runContradictions(toContradictionProfile(profile)).fired; }catch(e){}
+  const unlocked = after.find(r => !before.includes(r.id));
+  if(unlocked){ revealContradiction(unlocked); }
+  else { closeCheckin(); buildDash(); }
 };
+
+// Reveal a freshly-unlocked contradiction inside the check-in sheet.
+function revealContradiction(r){
+  document.getElementById('ci-question-title').textContent = 'that just unlocked this';
+  document.getElementById('ci-question-sub').textContent = '';
+  document.getElementById('ci-question-body').innerHTML = contradictionInner(r);
+  const btn = document.getElementById('ci-action-btn');
+  btn.textContent = 'got it'; btn.setAttribute('onclick','closeCheckin();buildDash();');
+}
 
 function switchTab(tab,el){
   closeCheckin();   // never let the check-in sheet persist across tabs
