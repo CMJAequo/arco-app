@@ -52,6 +52,12 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .field-label{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;}
 .field-input,.field-select{width:100%;background:var(--card);border:none;border-radius:12px;padding:14px 16px;font-size:15px;font-family:var(--font);color:var(--ink);outline:none;margin-bottom:16px;transition:box-shadow 0.2s;-webkit-appearance:none;}
 .field-input:focus,.field-select:focus{box-shadow:0 0 0 2px var(--orange);}
+.city-dd{position:absolute;top:calc(100% - 8px);left:0;right:0;background:var(--card);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.18);overflow:hidden;z-index:40;}
+.city-opt{display:flex;align-items:baseline;gap:8px;padding:12px 16px;cursor:pointer;border-bottom:0.5px solid var(--sep);}
+.city-opt:last-child{border-bottom:none;}
+.city-opt:hover,.city-opt:active{background:rgba(0,0,0,0.05);}
+.city-opt-name{font-size:15px;color:var(--ink);}
+.city-opt-sub{font-size:12px;color:var(--muted);}
 .chip-group{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
 .chip{padding:9px 16px;border-radius:24px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--ink);border:1.5px solid transparent;cursor:pointer;transition:all 0.15s;}
 .chip.sel-ink{background:var(--ink);color:#EDE9E1;}
@@ -438,8 +444,27 @@ const steps=[
     <div class="chip-group" id="g-sex">
       <div class="chip${profile.sex==='male'?' sel-ink':''}" data-val="male" onclick="selChip(this,'g-sex','ink')">male</div>
       <div class="chip${profile.sex==='female'?' sel-ink':''}" data-val="female" onclick="selChip(this,'g-sex','ink')">female</div>
-    </div>`,
-   save:()=>{profile.name=document.getElementById('f-name').value.trim()||'you';profile.age=parseInt(document.getElementById('f-age').value)||25;profile.sex=getChip('g-sex')||'male';}
+    </div>
+    <div class="field-label" style="margin-top:8px;">city</div>
+    <div style="position:relative;">
+      <input class="field-input" id="f-city" type="text" autocomplete="off" placeholder="start typing a city" value="${escAttr(profile.city||tzCity(profile.timezone||currentTz()))}" oninput="geoCityInput(this,'city-dd','pickCity')">
+      <div id="city-dd" class="city-dd" style="display:none;"></div>
+    </div>
+    <div class="field-hint" style="font-size:11px;color:var(--muted);margin-top:6px;">used for daylight and sun-exposure timing</div>`,
+   render_after:()=>{ autoResolveCity((profile.city||tzCity(profile.timezone||currentTz()))); },
+   save:()=>{
+     profile.name=document.getElementById('f-name').value.trim()||'you';
+     profile.age=parseInt(document.getElementById('f-age').value)||25;
+     profile.sex=getChip('g-sex')||'male';
+     const cityText=(document.getElementById('f-city').value||'').trim();
+     if(window._cityChosen && typeof profile.lat==='number'){
+       // coords already stored by pickCity / autoResolveCity
+     } else if(cityText){
+       // free-text (no dropdown pick, e.g. geocoding unreachable): keep the label, fall back to London coords
+       profile.city=cityText;
+       if(typeof profile.lat!=='number'){ applyCity(cityText,'',CITY_FALLBACK.lat,CITY_FALLBACK.lon,true); }
+     }
+   }
   },
   {title:'how do you sleep?',sub:'sleep is the master variable. everything builds from here.',
    render:()=>`
@@ -607,13 +632,15 @@ function renderStep(){
     <div style="flex:1;min-height:16px;"></div>
     <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>
     ${currentStep===0&&!_redoMode?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}`;
+  if(step.render_after) step.render_after();
 }
 window.nextStep=function(){
   steps[currentStep].save();currentStep++;
   if(currentStep>=steps.length){
     // On profile creation, capture latitude context (not used in scoring yet).
     try{ profile.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ profile.timezone = null; }
-    profile.latBand = deriveLatBand(profile.timezone);
+    // Prefer the real geocoded latitude; fall back to the timezone approximation only if no city resolved.
+    profile.latBand = (typeof profile.lat==='number') ? deriveLatBandFromLat(profile.lat) : deriveLatBand(profile.timezone);
     localStorage.setItem('arco-profile',JSON.stringify(profile));
     _redoMode = false; _profileSnapshot = null;   // changes committed; drop the redo snapshot
     showLoading();
@@ -681,6 +708,100 @@ function deriveLatBand(tz){
   const a = Math.abs(lat);
   return a>50 ? 'high' : (a>=35 ? 'mid' : 'low');
 }
+
+// ── CITY / GEOCODING (Open-Meteo, no key) ──
+// latBand straight from a real latitude, superseding the timezone approximation above.
+function deriveLatBandFromLat(lat){ const a=Math.abs(lat); return a>50 ? 'high' : (a>=35 ? 'mid' : 'low'); }
+// Best-guess city label from an IANA timezone, just to prefill the input.
+function tzCity(tz){ if(!tz) return ''; const parts=String(tz).split('/'); return parts[parts.length-1].replace(/_/g,' '); }
+function currentTz(){ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ return null; } }
+function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const CITY_FALLBACK = {lat:51.5074, lon:-0.1278}; // London, used only when geocoding is unreachable
+
+// Store a chosen city onto the profile and re-derive latBand from its real latitude.
+function applyCity(name, country, lat, lon, isFallback){
+  profile.city = name; profile.country = country||''; profile.lat = lat; profile.lon = lon;
+  profile.latBand = deriveLatBandFromLat(lat);
+  if(isFallback) profile.cityFallback = true; else delete profile.cityFallback;
+}
+
+// Debounced autocomplete against Open-Meteo geocoding. ddId = dropdown container, onPick = handler name.
+let _geoTimer = null;
+window.geoCityInput = function(el, ddId, onPick){
+  window._cityChosen = false;                 // any keystroke invalidates a prior pick
+  const q = el.value.trim();
+  const dd = document.getElementById(ddId);
+  if(!dd) return;
+  if(q.length < 3){ dd.style.display='none'; dd.innerHTML=''; return; }
+  clearTimeout(_geoTimer);
+  _geoTimer = setTimeout(async ()=>{
+    try{
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`);
+      const j = await r.json();
+      const res = (j && j.results) || [];
+      if(!res.length){ dd.style.display='none'; dd.innerHTML=''; return; }
+      dd.innerHTML = res.map(c=>{
+        const sub = [c.admin1, c.country].filter(Boolean).join(', ');
+        return `<div class="city-opt" onclick="${onPick}(this)" data-name="${escAttr(c.name)}" data-country="${escAttr(c.country||'')}" data-lat="${c.latitude}" data-lon="${c.longitude}">`+
+               `<span class="city-opt-name">${escAttr(c.name)}</span>`+(sub?`<span class="city-opt-sub">${escAttr(sub)}</span>`:'')+`</div>`;
+      }).join('');
+      dd.style.display='block';
+    }catch(e){ dd.style.display='none'; dd.innerHTML=''; }   // silent: free-text entry still works
+  }, 300);
+};
+
+// Onboarding: pick a city from the dropdown.
+window.pickCity = function(el){
+  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false);
+  window._cityChosen = true;
+  const inp = document.getElementById('f-city'); if(inp) inp.value = [profile.city, profile.country].filter(Boolean).join(', ');
+  const dd = document.getElementById('city-dd'); if(dd){ dd.style.display='none'; dd.innerHTML=''; }
+};
+
+// Silently resolve the prefilled default city so "accept the default" still gets real coordinates.
+// Non-blocking, and bails if the user has since typed something else.
+async function autoResolveCity(defCity){
+  if(!defCity || typeof profile.lat === 'number') return;
+  try{
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(defCity)}&count=1`);
+    const j = await r.json();
+    const c = j && j.results && j.results[0];
+    if(!c) return;
+    const inp = document.getElementById('f-city');
+    if(inp && inp.value.trim() !== defCity) return;          // user changed it: don't clobber
+    applyCity(c.name, c.country||'', c.latitude, c.longitude, false);
+    window._cityChosen = true;
+    if(inp) inp.value = [profile.city, profile.country].filter(Boolean).join(', ');
+  }catch(e){ /* silent: save() will free-text / fallback */ }
+}
+
+// ── CHANGE CITY (Profile tab, one tap) ──
+window.openCityChange = function(){
+  const def = profile.city || tzCity(profile.timezone || currentTz());
+  document.getElementById('ci-question-title').textContent = 'change city';
+  document.getElementById('ci-question-sub').textContent = 'used for daylight and sun-exposure timing';
+  document.getElementById('ci-question-body').innerHTML =
+    `<div style="position:relative;">`+
+    `<input class="field-input" id="cc-city" type="text" autocomplete="off" placeholder="start typing a city" value="${escAttr(def)}" oninput="geoCityInput(this,'cc-city-dd','pickCityLive')">`+
+    `<div id="cc-city-dd" class="city-dd" style="display:none;"></div></div>`;
+  const btn = document.getElementById('ci-action-btn');
+  btn.textContent = 'close'; btn.setAttribute('onclick','closeCheckin()');
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('checkin-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+// Picking a city here re-derives latBand, re-runs the diagnosis, persists, and refreshes.
+window.pickCityLive = function(el){
+  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false);
+  try{
+    const diagnosis = runDiagnosis(profile);
+    profile.supplements = diagnosis.filter(d=>!d.contraindicated).map(d=>d.id);
+  }catch(e){}
+  try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote();
+  closeCheckin();
+  showProfileTab();
+};
 
 // ── DIAGNOSIS ENGINE ──
 function runDiagnosis(p){
@@ -1617,6 +1738,7 @@ function showProfileTab(){
   const rows = [
     ['name', p.name],
     ['age', p.age],
+    ['city', p.city ? (p.city + (p.cityFallback?' (approx)':'')) : '—'],
     ['diet', p.diet||'—'],
     ['oily fish', p.fish||'—'],
     ['alcohol', p.alcohol||'—'],
@@ -1638,6 +1760,11 @@ function showProfileTab(){
       <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">${p.name||'Cons'}</div>
     </div>
     <div style="background:var(--card);border-radius:var(--radius);padding:4px 18px;margin-bottom:16px;">${rows}</div>
+
+    <button onclick="openCityChange()"
+      style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--ink);font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:10px;">
+      change city
+    </button>
 
     <button id="redo-btn" onclick="showRedoConfirm()"
       style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--ink);font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:10px;">
