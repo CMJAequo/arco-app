@@ -1507,8 +1507,8 @@ function drawClock(h){
           ctx.strokeStyle=`rgba(${rgb},${al})`;ctx.lineWidth=width;ctx.lineCap='butt';ctx.stroke();
         }
       };
-      arcBand(ct.bioBedTime, ct.bioWakeTime, 6*dpr, '48,52,66', 0.16, 0.75);   // biological: soft, wide
-      arcBand(ct.bedTime,    ct.wakeTime,    3*dpr, '26,22,18', 0.42, 0.20);   // actual: crisp, thinner
+      arcBand(ct.bioBedTime, ct.bioWakeTime, 6*dpr,   '48,52,66', 0.22, 0.75);   // biological: soft, wide
+      arcBand(ct.bedTime,    ct.wakeTime,    3.5*dpr, '26,22,18', 0.60, 0.20);   // actual: crisp, higher contrast
     }
   }
 
