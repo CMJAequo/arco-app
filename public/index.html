@@ -39,11 +39,27 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
   .modal-sheet{width:100%;}
 }
 
+/* Phone-width viewports: fill the real viewport rather than a fixed 844px, which
+   pushed the bottom of the container (and the continue button) off-screen. dvh
+   excludes the iOS browser chrome and home-indicator area; vh is the fallback. */
+@media (max-width:430px){
+  body{background:#EDE9E1;padding:0;}
+  .phone{width:100%;border-radius:0;box-shadow:none;min-height:100vh;min-height:100dvh;}
+  .screen{min-height:100vh;min-height:100dvh;}
+  /* Onboarding is bounded to the viewport so the step body scrolls internally and the
+     footer button stays pinned in the same place on every step. */
+  #screen-onboard{height:100vh;height:100dvh;overflow:hidden;}
+}
+
 /* ONBOARDING */
-.ob-header{background:var(--ink);padding:10px 24px 28px;}
-.ob-logo{color:#EDE9E1;font-size:26px;font-weight:300;letter-spacing:-0.02em;}
-.ob-sub{color:#EDE9E1;font-size:10px;opacity:0.38;letter-spacing:0.08em;margin-top:3px;}
-.ob-body{flex:1;padding:28px 24px 32px;display:flex;flex-direction:column;overflow-y:auto;}
+/* Onboarding header: no bar, just the wordmark on cream, matching the dashboard topbar. */
+.ob-header{background:var(--bg);display:flex;justify-content:center;align-items:center;padding:10px 20px 14px;}
+.ob-logo{color:var(--ink);font-size:22px;font-weight:300;letter-spacing:-0.03em;}
+.ob-body{flex:1;padding:20px 24px 0;display:flex;flex-direction:column;overflow-y:auto;min-height:0;}
+/* Continue button pinned to the bottom of the step: same position on every screen,
+   and clear of the iOS home indicator. */
+.ob-footer{position:sticky;bottom:0;margin-top:auto;padding:16px 0 calc(20px + env(safe-area-inset-bottom));background:var(--bg);}
+.ob-footer .btn{margin-top:0;}
 .step-bar{display:flex;gap:6px;margin-bottom:28px;}
 .step-dot{height:3px;flex:1;border-radius:2px;background:rgba(26,22,18,0.1);transition:background 0.3s;}
 .step-dot.done{background:var(--orange);}
@@ -284,8 +300,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 <!-- ONBOARDING -->
 <div class="screen active" id="screen-onboard">
   <div class="ob-header">
-    <div class="ob-logo">arco</div>
-    <div class="ob-sub">recovery system</div>
+    <span class="ob-logo">arco</span>
   </div>
   <div class="ob-body" id="ob-body"></div>
 </div>
@@ -661,9 +676,10 @@ function renderStep(){
     <div class="step-title">${step.title}</div>
     <div class="step-sub">${step.sub}</div>
     ${step.render()}
-    <div style="flex:1;min-height:16px;"></div>
-    <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>
-    ${currentStep===0&&!_redoMode?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}`;
+    <div class="ob-footer">
+      <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>
+      ${currentStep===0&&!_redoMode?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}
+    </div>`;
   if(step.render_after) step.render_after();
 }
 window.nextStep=function(){
@@ -1247,7 +1263,7 @@ function showDiagnosis(){
           <span style="font-size:10px;font-weight:600;color:#4BB87B;letter-spacing:0.06em;text-transform:uppercase;flex-shrink:0;margin-left:8px;">you take this</span>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${s.dose} · ${s.best_form}</div>
-        <div style="font-size:11px;color:rgba(26,22,18,0.55);line-height:1.55;padding:6px 8px;background:rgba(75,184,123,0.09);border-radius:6px;"><span style="color:#3f9e68;font-weight:600;">Check —</span> ${check}. ${s.anytime?'Timing: anytime, consistency matters more than the clock.':'Timing: '+fmt(s.window[0])+'–'+fmt(s.window[1])+'.'}</div>
+        <div style="font-size:11px;color:rgba(26,22,18,0.55);line-height:1.55;padding:6px 8px;background:rgba(75,184,123,0.09);border-radius:6px;"><span style="color:#3f9e68;font-weight:600;">Check:</span> ${check}. ${s.anytime?'Timing: anytime, consistency matters more than the clock.':'Timing: '+fmt(s.window[0])+'–'+fmt(s.window[1])+'.'}</div>
       </div>`;
     }
     const confColor = confidenceColors[d.confidence]||'var(--muted)';
@@ -1343,11 +1359,6 @@ function buildDash(){
     ${dailyContradictionCard()}
 
     ${weekPlanCard()}
-
-    <div class="week-section-label" style="margin-top:4px;">your week</div>
-    <div style="background:var(--card);border-radius:var(--radius);padding:14px 12px 10px;margin-bottom:12px;">
-      ${buildWeekRow()}
-    </div>
 
     <div class="checkin-card" onclick="openCheckin()">
       <div class="checkin-card-left">
@@ -2164,7 +2175,7 @@ function weekPlanCard(){
   if(plan.sunsetBeforeTraining){ const d=plan.sunsetBeforeTraining; flags.push(`Sunset ${d.i>=3?'looks to fall':'falls'} before your usual training time from ${d.name}.`); }
   const flagHtml = flags.length ? `<div style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--sep);">${flags.join('<br>')}</div>` : '';
   return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 14px 14px;margin-bottom:12px;">
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px;">the week ahead</div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px;">this week</div>
     <div style="display:flex;gap:3px;">${cols}</div>
     ${flagHtml}
     <div style="font-size:10px;color:var(--muted);opacity:0.75;margin-top:10px;">forecasts beyond 4 days are less reliable</div>
@@ -2975,6 +2986,7 @@ const RULES = [
       'Consistently demonstrated — vegetarians show greater increases in ' +
       'muscle creatine and performance than omnivores.',
     fixes: [
+      { cost: 'free', action: 'No free fix for this one, dietary creatine comes almost entirely from meat and fish.' },
       { cost: 8, action: '3-5g creatine monohydrate daily. Cheapest high-evidence supplement available.' }
     ],
     surprise: 7
@@ -3648,7 +3660,7 @@ function showProtocolTab(){
         <div style="font-size:11px;color:var(--muted);line-height:1.55;">${r}</div>
       </div>`).join('');
     const bottomNote = d.alreadyTaking
-      ? `<span style="color:#3f9e68;font-weight:600;">Check —</span> ${(s.form_note||'').split('. ')[0].replace(/\.$/,'')}.`
+      ? `<span style="color:#3f9e68;font-weight:600;">Check:</span> ${(s.form_note||'').split('. ')[0].replace(/\.$/,'')}.`
       : `${s.reason.split('.')[0]}.`;
     const bottomBg = d.alreadyTaking ? 'rgba(75,184,123,0.09)' : 'rgba(26,22,18,0.04)';
 
@@ -3785,6 +3797,11 @@ function showProgressTab(){
       <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">progress</div>
       <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">day ${totalDays}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px;">consistency compounds. the data gets more useful every week.</div>
+    </div>
+
+    <div class="week-section-label" style="margin-top:4px;">check-in history</div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:14px 12px 10px;margin-bottom:12px;">
+      ${buildWeekRow()}
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
