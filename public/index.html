@@ -1321,20 +1321,9 @@ function buildDash(){
   const hr=now.getHours();
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
 
-  // Status line under the clock. Prefer the next FUTURE dose; otherwise surface a
-  // due-now or overdue dose so nothing untaken is silently hidden.
-  const SHORT_NAME={vitd:'vitamin D3',magnesium:'magnesium',omega3:'omega-3',zinc:'zinc',b12:'B12',k2:'vitamin K2',coq10:'CoQ10',ashwagandha:'ashwagandha',magnesium_threonate:'magnesium L-threonate',creatine:'creatine',iron:'iron'};
-  const _nm=s=>SHORT_NAME[s.key]||s.name.toLowerCase();
-  const _untaken=(profile.supplements||[]).map(k=>supView(k)).filter(s=>s&&!s.anytime&&!takenToday.includes(s.key));
-  const _future=_untaken.filter(s=>s.window[0]>h).sort((a,b)=>a.window[0]-b.window[0]);
-  const _dueNow=_untaken.filter(s=>h>=s.window[0]&&h<s.window[1]).sort((a,b)=>a.window[0]-b.window[0]);
-  const _overdue=_untaken.filter(s=>h>=s.window[1]).sort((a,b)=>a.window[0]-b.window[0]);
-  const nextLine = _future[0] ? `next: ${_nm(_future[0])}, ${fmt(_future[0].window[0])}`
-    : _dueNow[0] ? `due now: ${_nm(_dueNow[0])}`
-    : _overdue[0] ? `overdue: ${_nm(_overdue[0])}, ${fmt(_overdue[0].window[0])}`
-    : 'protocol complete for today';
-
   document.getElementById('dash-body').innerHTML=`
+    ${stateCard(h, profile)}
+
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
       <div class="arc-ring-wrap" style="position:relative;">
@@ -1343,26 +1332,15 @@ function buildDash(){
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
       </div>
-      <div style="text-align:center;margin-top:8px;margin-bottom:2px;">
-        <span style="display:inline-block;background:var(--ink);color:#EDE9E1;font-size:12px;font-weight:500;letter-spacing:0.02em;padding:7px 18px;border-radius:100px;">${nextLine}</span>
-      </div>
     </div>
+
+    ${dayStripCard()}
 
     ${buildProtocolCard(h, profile)}
 
     ${dailyContradictionCard()}
 
     ${weekPlanCard()}
-
-    <div class="now-card" style="margin-bottom:12px;">
-      <div class="now-window-label">open window</div>
-      <div class="now-window-time">${windowTimeStr(h, profile)}</div>
-      <div class="now-window-desc">${getCurrentWindow(h,profile).desc}</div>
-      <div class="now-window-bar">
-        <div class="now-window-fill" style="width:${windowProgress(h,profile)}%;"></div>
-      </div>
-      <div class="now-window-footer">${windowRemaining(h,profile)} remaining</div>
-    </div>
 
     <div class="week-section-label" style="margin-top:4px;">your week</div>
     <div style="background:var(--card);border-radius:var(--radius);padding:14px 12px 10px;margin-bottom:12px;">
@@ -1924,6 +1902,171 @@ function contradictionInner(r){
 }
 
 // One contradiction on the Today tab, rotating daily. Shown ids tracked in localStorage.
+// ── DAY STRIP ────────────────────────────────────────────────────────────────
+// Horizontal wake→bed bar answering "what shape is my day". Cognitive tones on the
+// clock's gold/grey axis (gold = sharp daylight, muted gold = neutral, grey = the
+// valley); physicalPeak on its own ink line below (a different measurement); an orange
+// now line. No labels; every segment taps to a popup. Cognitive windows live here,
+// not on the clock.
+const SHORT_NAME = { vitd:'vitamin D3', magnesium:'magnesium', omega3:'omega-3', zinc:'zinc', b12:'B12',
+  k2:'vitamin K2', coq10:'CoQ10', ashwagandha:'ashwagandha', magnesium_threonate:'magnesium L-threonate',
+  creatine:'creatine', iron:'iron' };
+const WINDOW_NAME = { sleepInertia:'Sleep inertia', deepWork:'Deep work', trough:'Trough',
+  secondWindow:'Second window', physicalPeak:'Physical peak', windDown:'Wind-down', neutral:'Steady',
+  dipWalk:'Dip walk', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
+  postTraining:'Post-training meal', sleep:'Asleep' };
+const WINDOW_LINE = {
+  sleepInertia:'Grogginess in the first 30 to 60 minutes after waking. Do not judge the day by how you feel now, it lifts on its own.',
+  deepWork:'Your sharpest focus of the day. Protect it for the hardest cognitive work and keep meetings out of it.',
+  trough:'A dip built into your circadian rhythm, not a discipline problem. Put admin, email and mechanical work here rather than fighting through it.',
+  secondWindow:'Alertness recovers into the early evening. A good slot for a second block of focused work.',
+  physicalPeak:'Strength and power track core body temperature, which peaks now. The best window of the day for hard training.',
+  windDown:'The last stretch before bed. Ease off cognitively so sleep pressure can take over.',
+  neutral:'No strong peak or dip, a steady stretch. Fine for routine work, meetings and admin.',
+  dipWalk:'Ten minutes outside now blunts the afternoon dip. Light is alerting through a different pathway than food, and it does not borrow from tonight.',
+  breakfast:'Breakfast. Protein-forward, around 30g if you can, steadies the morning.',
+  lunch:'Lunch. Keep it substantial enough to carry the afternoon.',
+  mainMeal:'Your main meal, timed so it is digested before you train.',
+  postTraining:'Refuel after training. Protein-forward rather than a full second dinner.',
+  sleep:'Asleep, or heading there. Nothing to act on right now.'
+};
+window.openWindowPopup = function(name, start, end){
+  const line = WINDOW_LINE[name]; if(!line) return;
+  const NAMED = ['sleepInertia','deepWork','trough','secondWindow','physicalPeak','windDown'];
+  let next = null;
+  try{ next = getDayWindows(profile).filter(w=>NAMED.includes(w.name)).sort((a,b)=>a.start-b.start)
+    .find(w => w.start >= end - 0.001 && w.name !== name); }catch(e){}
+  document.getElementById('ci-question-title').textContent = `${WINDOW_NAME[name].toUpperCase()} · ${fmt(start)}–${fmt(end)}`;
+  document.getElementById('ci-question-sub').textContent = '';
+  const nextHtml = next ? `<div style="font-size:12px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:0.5px solid var(--sep);">Next: ${WINDOW_NAME[next.name].toLowerCase()}, ${fmt(next.start)}</div>` : '';
+  document.getElementById('ci-question-body').innerHTML = `<div style="font-size:13px;color:var(--muted);line-height:1.6;">${line}</div>${nextHtml}`;
+  const btn = document.getElementById('ci-action-btn'); btn.textContent = 'got it'; btn.setAttribute('onclick','closeCheckin()');
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('checkin-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+// The single "now" phase, by priority: dipWalk > supplement due > meal > cognitive >
+// physicalPeak, falling back to a steady gap, or sleep outside the waking day. There is
+// never a moment when nothing is true.
+function getCurrentPhase(h, p){
+  const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
+  if(wake == null || bed == null) return null;
+  let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
+  const bn = {}; wins.forEach(w => bn[w.name] = w);
+  const on = w => w && h >= w.start && h < w.end;
+  if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
+  const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && h >= s.window[0] && h < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
+  if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
+  const meal = ['breakfast','lunch','mainMeal','postTraining'].map(n=>bn[n]).filter(Boolean).find(on);
+  if(meal) return { key:meal.name, start:meal.start, end:meal.end };
+  const cog = ['sleepInertia','deepWork','trough','secondWindow','windDown'].map(n=>bn[n]).filter(Boolean).find(on);
+  if(cog) return { key:cog.name, start:cog.start, end:cog.end };
+  if(on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
+  if(h >= wake && h < bed){
+    const cw = ['sleepInertia','deepWork','trough','secondWindow','windDown'].map(n=>bn[n]).filter(Boolean).sort((a,b)=>a.start-b.start);
+    let start = wake, end = bed;
+    cw.forEach(w => { if(w.end <= h && w.end > start) start = w.end; });
+    const nx = cw.find(w => w.start > h); if(nx) end = nx.start;
+    return { key:'neutral', start, end };
+  }
+  return { key:'sleep', start:bed, end:wake };
+}
+// The next thing that begins at or after `after`: a window or an untaken dose.
+function nextThing(after, p){
+  let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
+  const cands = [];
+  wins.filter(w => w.name !== 'neutral').forEach(w => cands.push({ name:WINDOW_NAME[w.name] || w.name, time:w.start }));
+  (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key))
+    .forEach(s => cands.push({ name:(SHORT_NAME[s.key]||s.name), time:s.window[0] }));
+  return cands.filter(c => c.time >= after - 0.001).sort((a,b)=>a.time-b.time)[0] || null;
+}
+// Always-on state card: plain language for what is happening now and what to do.
+function stateCard(h, p){
+  const ph = getCurrentPhase(h, p);
+  if(!ph) return '';
+  let name, line;
+  if(ph.key === 'supplement'){ const s = ph.sup; name = (SHORT_NAME[s.key]||s.name) + ', due'; line = 'Take ' + s.dose + ' now.'; }
+  else { name = WINDOW_NAME[ph.key] || ph.key; line = WINDOW_LINE[ph.key] || ''; }
+  const timeRange = ph.key === 'sleep' ? '' : fmt(ph.start) + '–' + fmt(ph.end);
+  const dur = ph.end - ph.start, pctv = dur > 0 ? Math.max(0, Math.min(100, ((h - ph.start) / dur) * 100)) : 0;
+  const rem = Math.max(0, Math.round((ph.end - h) * 60));
+  const remTxt = rem >= 60 ? Math.floor(rem/60) + 'h' + (rem%60 ? ' ' + (rem%60) + 'm' : '') : rem + 'm';
+  const showBar = ph.key !== 'sleep' && ph.key !== 'neutral' && dur > 0;
+  const nx = nextThing(ph.end, p);
+  const nextTxt = nx ? `next: ${String(nx.name).toLowerCase()} at ${fmt(nx.time)}` : '';
+  return `<div class="now-card" style="margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px;">
+      <span class="now-window-label" style="margin-bottom:0;">now · ${name}</span>
+      ${timeRange ? `<span style="font-size:11px;color:rgba(237,233,225,0.4);flex-shrink:0;">${timeRange}</span>` : ''}
+    </div>
+    <div class="now-window-desc" style="margin-bottom:${showBar ? '12' : '10'}px;">${line}</div>
+    ${showBar ? `<div class="now-window-bar"><div class="now-window-fill" style="width:${pctv}%;"></div></div>
+    <div class="now-window-footer" style="margin-bottom:8px;">${remTxt} remaining</div>` : ''}
+    ${nextTxt ? `<div class="now-window-footer">${nextTxt}</div>` : ''}
+  </div>`;
+}
+function dayStripCard(){
+  const p = profile, wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
+  if(wake == null || bed == null) return '';
+  const span = bed - wake; if(span <= 0) return '';
+  let wins; try{ wins = getDayWindows(p); }catch(e){ return ''; }
+  const byName = {}; wins.forEach(w => byName[w.name] = w);
+  // Gold/grey axis matching the clock. The gold→grey hue shift makes the trough read
+  // as the valley without extra treatment.
+  const TONE = { sharp:'rgba(214,158,52,0.92)', neutral:'rgba(203,181,138,0.6)', dull:'rgba(120,122,128,0.42)' };
+  const toneOf = { sleepInertia:'dull', deepWork:'sharp', trough:'dull', secondWindow:'sharp', windDown:'dull' };
+  const pct = t => ((t - wake) / span) * 100;
+  const strip = ['sleepInertia','deepWork','trough','secondWindow','windDown']
+    .map(n => byName[n]).filter(Boolean).sort((a,b) => a.start - b.start);
+  let cursor = wake; const segs = [];
+  strip.forEach(w => {
+    const s = Math.max(w.start, wake), e = Math.min(w.end, bed);
+    if(e <= s) return;
+    if(s > cursor + 0.001) segs.push({ start:cursor, end:s, tone:'neutral', name:'neutral' });
+    segs.push({ start:s, end:e, tone:toneOf[w.name], name:w.name });
+    cursor = e;
+  });
+  if(cursor < bed - 0.001) segs.push({ start:cursor, end:bed, tone:'neutral', name:'neutral' });
+  const segHtml = segs.map(sg => {
+    const left = pct(sg.start), width = pct(sg.end) - pct(sg.start);
+    // every segment (gaps included) is tappable
+    return `<div onclick="openWindowPopup('${sg.name}',${+sg.start.toFixed(3)},${+sg.end.toFixed(3)})" style="position:absolute;top:0;bottom:0;left:${left}%;width:${width}%;background:${TONE[sg.tone]};cursor:pointer;"></div>`;
+  }).join('');
+  // physicalPeak — its own line below the strip, deep ink: a different measurement.
+  let peakHtml = '';
+  const pk = byName['physicalPeak'];
+  if(pk){ const s = Math.max(pk.start, wake), e = Math.min(pk.end, bed);
+    if(e > s) peakHtml = `<div onclick="openWindowPopup('physicalPeak',${+s.toFixed(3)},${+e.toFixed(3)})" style="position:absolute;top:0;bottom:0;left:${pct(s)}%;width:${pct(e)-pct(s)}%;background:rgba(26,22,18,0.72);border-radius:2px;cursor:pointer;"></div>`;
+  }
+  // Meals — small ink notches on the same timeline, a distinct category from the phase
+  // blocks. Small tap zone so they don't swallow the underlying phase segment.
+  const mealMarks = ['breakfast','lunch','mainMeal','postTraining'].map(n => byName[n]).filter(Boolean).map(m => {
+    const s = Math.max(m.start, wake), e = Math.min(m.end, bed); if(e <= s) return '';
+    return `<div onclick="event.stopPropagation();openWindowPopup('${m.name}',${+s.toFixed(3)},${+e.toFixed(3)})" style="position:absolute;top:0;height:18px;left:${pct((s+e)/2)}%;transform:translateX(-50%);width:24px;z-index:2;cursor:pointer;display:flex;justify-content:center;">
+      <div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid rgba(26,22,18,0.82);"></div></div>`;
+  }).join('');
+  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
+  const inDay = h >= wake && h < bed;
+  const nowHtml = inDay
+    ? `<div style="position:absolute;top:16px;bottom:0;left:${pct(h)}%;width:1.5px;background:rgba(232,82,10,0.95);z-index:3;pointer-events:none;"></div>` : '';
+  // The one label: the current phase, at the now-line. Everything else stays unlabelled.
+  let labelHtml = '';
+  if(inDay){
+    const ph = getCurrentPhase(h, p);
+    if(ph){ const nm = ph.key === 'supplement' ? (SHORT_NAME[ph.sup.key]||ph.sup.name) : (WINDOW_NAME[ph.key]||ph.key);
+      const lx = Math.max(9, Math.min(91, pct(h)));
+      labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
+    }
+  }
+  // Label row on top, strip row, then physicalPeak on its own line; now-line spans strip+peak.
+  return `<div style="margin:0 2px 12px;position:relative;padding-top:16px;">
+    ${labelHtml}
+    <div style="position:relative;height:30px;border-radius:6px;overflow:hidden;">${segHtml}${mealMarks}</div>
+    <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
+    ${nowHtml}
+  </div>`;
+}
+
 function dailyContradictionCard(){
   let fired;
   try{ fired = runContradictions(toContradictionProfile(profile)).fired; }catch(e){ return ''; }
