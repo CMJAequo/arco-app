@@ -1469,11 +1469,15 @@ function drawClock(h){
     ctx.lineWidth=SW;ctx.lineCap='butt';ctx.stroke();
   }
 
+  // Current time on the linear wake..bed line, for comparing against window/dose times
+  // (which may run past 24 when bedtime is after midnight).
+  const hL = dayH(h, profile);
+
   // Dip-walk highlight — when the ~15-min walk window is open, brighten that arc so it
   // reads as a window open now and closing. Renders nothing when inactive.
   try{
     const dw = getDayWindows(profile).find(w => w.name === 'dipWalk');
-    if(dw && h >= dw.start && h < dw.end){
+    if(dw && hL >= dw.start && hL < dw.end){
       const dwAng = hh => (hh/24)*Math.PI*2 - Math.PI/2;
       const a0 = dwAng(dw.start), a1 = dwAng(dw.end);
       const dp = (Math.sin(Date.now()/500) + 1) / 2;
@@ -1579,7 +1583,7 @@ function drawClock(h){
   sups2.forEach(s => {
     const key = s.key;
     const taken2 = takenToday.includes(key);
-    const isDue2 = h >= s.window[0] && h < s.window[1];
+    const isDue2 = hL >= s.window[0] && hL < s.window[1];
     const group2 = hourGroups2[s.window[0]];
     const idx2 = group2.indexOf(key);
     const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 0.7 : 0;
@@ -1602,7 +1606,7 @@ function drawClock(h){
     const lx2 = cx + Math.cos(ma2) * lblDist;
     const ly2 = cy + Math.sin(ma2) * lblDist;
 
-    const isOverdue2 = !taken2 && h >= s.window[1];
+    const isOverdue2 = !taken2 && hL >= s.window[1];
     if(taken2){
       // taken: solid filled dot
       ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
@@ -1759,10 +1763,16 @@ function getDayWindows(p){
   const ct = (typeof computeChronotype === 'function') ? computeChronotype(p) : null;
   if(ct && ct.MSFsc != null) off = Math.max(-1.5, Math.min(1.5, ct.MSFsc - 4.0));
 
+  // Linear day: a bedtime at or after midnight is the NEXT day, so express it as >24
+  // (00:00 becomes 24). Windows are returned in these linear coordinates; fmt() wraps
+  // them for display and dayH() maps the current time onto the same line.
+  const bedL = bedLinear(p);
+  if(train != null && train < wake) train += 24;   // training after midnight
+
   const wins = [];
   const add = (name, category, start, end, level) => {
-    if(start >= bed) return;            // window landing after bedtime → suppress
-    wins.push({ name, category, level: level || null, start, end });
+    if(start >= bedL) return;           // window landing after bedtime → suppress
+    wins.push({ name, category, level: level || null, start, end: Math.min(end, bedL) });
   };
 
   // Cognitive (wake-anchored, offset by chronotype). windDown is bed-anchored, so
@@ -1772,7 +1782,7 @@ function getDayWindows(p){
   add('trough',       'cognitive', wake + 6 + off,   wake + 8 + off,    'STRONG');
   add('secondWindow', 'cognitive', wake + 8.5 + off, wake + 10.5 + off, 'MODERATE');
   add('physicalPeak', 'cognitive', wake + 10 + off,  wake + 11.5 + off, 'MODERATE-STRONG');
-  add('windDown',     'cognitive', bed - 1.5,        bed,               'MODERATE');
+  add('windDown',     'cognitive', bedL - 1.5,       bedL,              'MODERATE');
 
   // Meals & recovery (anchored to wake / training, never offset).
   add('breakfast', 'meal',     wake + 0.5, wake + 1.5,  null);
@@ -1790,6 +1800,18 @@ function getDayWindows(p){
     add('mainMeal', 'meal', wake + 9, wake + 10, null);   // rest day / no training
   }
   return wins;
+}
+// A bedtime at or before wake belongs to the next day: express it on a linear
+// wake..bed line (e.g. wake 08:00, bed 00:00 -> 24). Everything downstream — day
+// windows, dose windows, the strip — works on that line so nothing collapses.
+function bedLinear(p){
+  const wake = p.wakeTime ?? p.wake ?? 7, bed = p.bedTime ?? p.bed ?? 23;
+  return bed <= wake ? bed + 24 : bed;
+}
+// Map a wall-clock hour onto the same linear line (01:00 with an 08:00 wake is 25).
+function dayH(h, p){
+  const wake = (p || profile).wakeTime ?? (p || profile).wake ?? 7;
+  return h < wake ? h + 24 : h;
 }
 
 function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
@@ -1987,28 +2009,30 @@ function dipWalkLine(p){
 function getCurrentPhase(h, p){
   const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
   if(wake == null || bed == null) return null;
+  const bedL = bedLinear(p), hL = dayH(h, p);   // linear line: handles post-midnight bedtimes
   let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
   const bn = {}; wins.forEach(w => bn[w.name] = w);
-  const on = w => w && h >= w.start && h < w.end;
+  const on = w => w && hL >= w.start && hL < w.end;
   if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
-  const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && h >= s.window[0] && h < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
+  const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && hL >= s.window[0] && hL < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
   if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
   // physicalPeak outranks meals/cognitive only when a session is imminent (within 2h).
   const tmapP = { morning:7, afternoon:14, evening:20 };
-  const trainH = (typeof p.trainingTime === 'number') ? p.trainingTime
+  let trainH = (typeof p.trainingTime === 'number') ? p.trainingTime
     : (p.trainingTime && tmapP[p.trainingTime] != null ? tmapP[p.trainingTime] : null);
-  const trainSoon = trainH != null && (trainH - h) >= 0 && (trainH - h) <= 2;
+  if(trainH != null && trainH < wake) trainH += 24;
+  const trainSoon = trainH != null && (trainH - hL) >= 0 && (trainH - hL) <= 2;
   if(trainSoon && on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
   const meal = ['breakfast','lunch','mainMeal','postTraining'].map(n=>bn[n]).filter(Boolean).find(on);
   if(meal) return { key:meal.name, start:meal.start, end:meal.end };
   const cog = ['sleepInertia','deepWork','trough','secondWindow','windDown'].map(n=>bn[n]).filter(Boolean).find(on);
   if(cog) return { key:cog.name, start:cog.start, end:cog.end };
   if(on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
-  if(h >= wake && h < bed){
+  if(hL >= wake && hL < bedL){
     const cw = ['sleepInertia','deepWork','trough','secondWindow','windDown'].map(n=>bn[n]).filter(Boolean).sort((a,b)=>a.start-b.start);
-    let start = wake, end = bed;
-    cw.forEach(w => { if(w.end <= h && w.end > start) start = w.end; });
-    const nx = cw.find(w => w.start > h); if(nx) end = nx.start;
+    let start = wake, end = bedL;
+    cw.forEach(w => { if(w.end <= hL && w.end > start) start = w.end; });
+    const nx = cw.find(w => w.start > hL); if(nx) end = nx.start;
     return { key:'neutral', start, end };
   }
   return { key:'sleep', start:bed, end:wake };
@@ -2034,8 +2058,9 @@ function fridayCard(){
   </div>`;
 }
 function dayStripCard(){
-  const p = profile, wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
-  if(wake == null || bed == null) return '';
+  const p = profile, wake = p.wakeTime ?? p.wake;
+  if(wake == null || (p.bedTime ?? p.bed) == null) return '';
+  const bed = bedLinear(p);                       // post-midnight bedtime becomes >24
   const span = bed - wake; if(span <= 0) return '';
   let wins; try{ wins = getDayWindows(p); }catch(e){ return ''; }
   const byName = {}; wins.forEach(w => byName[w.name] = w);
@@ -2073,7 +2098,7 @@ function dayStripCard(){
     return `<div onclick="event.stopPropagation();openWindowPopup('${m.name}',${+s.toFixed(3)},${+e.toFixed(3)})" style="position:absolute;top:0;height:18px;left:${pct((s+e)/2)}%;transform:translateX(-50%);width:24px;z-index:2;cursor:pointer;display:flex;justify-content:center;">
       <div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid rgba(26,22,18,0.82);"></div></div>`;
   }).join('');
-  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
+  const now = new Date(), h = dayH(now.getHours() + now.getMinutes()/60, p);
   const inDay = h >= wake && h < bed;
   const nowHtml = inDay
     ? `<div style="position:absolute;top:16px;bottom:0;left:${pct(h)}%;width:1.5px;background:rgba(232,82,10,0.95);z-index:3;pointer-events:none;"></div>` : '';
@@ -2370,7 +2395,10 @@ function supBucket(key){
 function personalizeWindow(key, p){
   p = p || profile;
   if(supBucket(key) === 'anytime') return null;                 // no timed slot
-  const wake = (p.wakeTime ?? p.wake ?? 7), bed = (p.bedTime ?? p.bed ?? 23);
+  // Linear day: a post-midnight bedtime is expressed as >24 so the evening bucket does
+  // not collapse back onto the morning (00:00 bedtime would otherwise clamp everything
+  // to wake). fmt() wraps the result for display.
+  const wake = (p.wakeTime ?? p.wake ?? 7), bed = bedLinear(p);
   let start, end;
   switch(supBucket(key)){
     case 'evening':
@@ -3511,6 +3539,7 @@ function buildSupplementCard(h, p) {
 function buildProtocolCard(h, p){
   const sups = p.supplements || [];
   if(!sups.length) return '';
+  h = dayH(h, p);                                 // linear line: post-midnight bedtimes
   const all = sups.map(key => supView(key, p)).filter(s => s && s.name);
   const timed = all.filter(s => !s.anytime).sort((a,b) => a.window[0] - b.window[0]);
   const anytimes = all.filter(s => s.anytime);
