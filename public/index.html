@@ -1435,23 +1435,17 @@ function drawClock(h){
   // otherwise fall back to the previous decorative gradient.
   const hasSun = typeof profile.sunriseToday==='number' && typeof profile.sunsetToday==='number';
   const SR = profile.sunriseToday, SS = profile.sunsetToday;
-  const GOLD=[214,158,52], DUSK=[196,116,40], NIGHT=[66,72,88];   // warm gold day, warm dawn/dusk, deep slate night
-  const TW=1/3;                                                   // ~20 min soft transition either side
-  const clamp01=x=>Math.max(0,Math.min(1,x));
-  function daylightness(hr){
-    // 0 = full night, 1 = full day, with smooth ramps across dawn and dusk
-    if(hr>=SR-TW && hr<=SR+TW) return clamp01((hr-(SR-TW))/(2*TW));   // dawn
-    if(hr>=SS-TW && hr<=SS+TW) return 1-clamp01((hr-(SS-TW))/(2*TW)); // dusk
-    return (hr>SR+TW && hr<SS-TW) ? 1 : 0;
-  }
+
+  // Ring and day strip share ONE palette and ONE set of phase divisions (DAY_TONE /
+  // phaseToneAt), so the circle and the bar read as the same system. The circle adds
+  // daylight markers and supplement dots; the bar carries the phase detail.
+  const wakeR = profile.wakeTime ?? profile.wake ?? 7, bedR = bedLinear(profile);
+  let _bn = {}; try{ getDayWindows(profile).forEach(w => _bn[w.name] = w); }catch(e){}
   function ringColor(hr){
-    const t=daylightness(hr), lerp=(a,b,u)=>a+(b-a)*u;
-    let c;
-    if(t<0.5){ const u=t/0.5; c=[lerp(NIGHT[0],DUSK[0],u),lerp(NIGHT[1],DUSK[1],u),lerp(NIGHT[2],DUSK[2],u)]; }
-    else { const u=(t-0.5)/0.5; c=[lerp(DUSK[0],GOLD[0],u),lerp(DUSK[1],GOLD[1],u),lerp(DUSK[2],GOLD[2],u)]; }
-    return c.map(Math.round);
+    const hl = hr < wakeR ? hr + 24 : hr;                 // linear wake..bed line
+    if(hl < wakeR || hl >= bedR) return DAY_TONE.night;   // asleep: deep brown
+    return DAY_TONE[phaseToneAt(hl, _bn)];
   }
-  const _wins = hasSun ? null : getWindowsSimple();
 
   // Draw ring as tiny arc segments
   const STEPS=360;
@@ -1460,9 +1454,7 @@ function drawClock(h){
     const hMid=((t0*24)+(t1*24))/2;
     const a0=t0*Math.PI*2-Math.PI/2;
     const a1=t1*Math.PI*2-Math.PI/2;
-    let col;
-    if(hasSun){ col=ringColor(hMid); }
-    else { const c=getColor(hMid); const b=_wins.some(w=>hMid>=w.s&&hMid<w.e&&h>=w.s&&h<w.e)?1.0:0.45; col=[Math.round(c.r*b),Math.round(c.g*b),Math.round(c.b*b)]; }
+    const col=ringColor(hMid);
     ctx.beginPath();
     ctx.arc(cx,cy,r,a0-0.002,a1+0.002);
     ctx.strokeStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
@@ -1814,6 +1806,24 @@ function dayH(h, p){
   return h < wake ? h + 24 : h;
 }
 
+// ── SHARED DAY PALETTE ───────────────────────────────────────────────────────
+// One palette and one set of phase divisions for BOTH the clock ring and the day
+// strip, so the circle and the bar are the same system in two shapes.
+const DAY_TONE = {
+  sharp:   [214, 158,  52],   // deep work / second window — gold
+  neutral: [203, 181, 138],   // steady stretches — muted gold
+  dull:    [158, 152, 142],   // inertia / trough / wind-down — warm grey, the valley
+  night:   [ 40,  27,  15]    // asleep — very dark brown
+};
+const rgbTone = t => `rgb(${DAY_TONE[t][0]},${DAY_TONE[t][1]},${DAY_TONE[t][2]})`;
+// Which tone covers a given linear-day hour. bn = getDayWindows keyed by name.
+function phaseToneAt(hl, bn){
+  const on = w => w && hl >= w.start && hl < w.end;
+  if(on(bn.deepWork) || on(bn.secondWindow)) return 'sharp';
+  if(on(bn.sleepInertia) || on(bn.trough) || on(bn.windDown)) return 'dull';
+  return 'neutral';
+}
+
 function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
 
 function getCurrentWindow(h,p){
@@ -2064,9 +2074,9 @@ function dayStripCard(){
   const span = bed - wake; if(span <= 0) return '';
   let wins; try{ wins = getDayWindows(p); }catch(e){ return ''; }
   const byName = {}; wins.forEach(w => byName[w.name] = w);
-  // Gold/grey axis matching the clock. The gold→grey hue shift makes the trough read
-  // as the valley without extra treatment.
-  const TONE = { sharp:'rgba(214,158,52,0.92)', neutral:'rgba(203,181,138,0.6)', dull:'rgba(120,122,128,0.42)' };
+  // Exactly the clock's palette and divisions (DAY_TONE / phaseToneAt), opaque so the
+  // bar and the ring read as the same colours.
+  const TONE = { sharp:rgbTone('sharp'), neutral:rgbTone('neutral'), dull:rgbTone('dull') };
   const toneOf = { sleepInertia:'dull', deepWork:'sharp', trough:'dull', secondWindow:'sharp', windDown:'dull' };
   const pct = t => ((t - wake) / span) * 100;
   const strip = ['sleepInertia','deepWork','trough','secondWindow','windDown']
