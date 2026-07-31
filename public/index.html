@@ -1336,6 +1336,8 @@ function buildDash(){
 
     ${dayStripCard()}
 
+    ${fridayCard()}
+
     ${buildProtocolCard(h, profile)}
 
     ${dailyContradictionCard()}
@@ -1927,7 +1929,7 @@ const SHORT_NAME = { vitd:'vitamin D3', magnesium:'magnesium', omega3:'omega-3',
   creatine:'creatine', iron:'iron' };
 const WINDOW_NAME = { sleepInertia:'Sleep inertia', deepWork:'Deep work', trough:'Trough',
   secondWindow:'Second window', physicalPeak:'Physical peak', windDown:'Wind-down', neutral:'Steady',
-  dipWalk:'Dip walk', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
+  dipWalk:'Before the dip', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
   postTraining:'Post-training meal', sleep:'Asleep' };
 const WINDOW_LINE = {
   sleepInertia:'Grogginess in the first 30 to 60 minutes after waking. Do not judge the day by how you feel now, it lifts on its own.',
@@ -1945,7 +1947,7 @@ const WINDOW_LINE = {
   sleep:'Asleep, or heading there. Nothing to act on right now.'
 };
 window.openWindowPopup = function(name, start, end){
-  const line = WINDOW_LINE[name]; if(!line) return;
+  const line = name === 'dipWalk' ? dipWalkLine(profile) : WINDOW_LINE[name]; if(!line) return;
   const NAMED = ['sleepInertia','deepWork','trough','secondWindow','physicalPeak','windDown'];
   let next = null;
   try{ next = getDayWindows(profile).filter(w=>NAMED.includes(w.name)).sort((a,b)=>a.start-b.start)
@@ -1959,9 +1961,20 @@ window.openWindowPopup = function(name, start, end){
   document.getElementById('checkin-modal').classList.add('open');
   document.body.style.overflow = 'hidden';
 };
-// The single "now" phase, by priority: dipWalk > supplement due > meal > cognitive >
-// physicalPeak, falling back to a steady gap, or sleep outside the waking day. There is
-// never a moment when nothing is true.
+// Dip-walk copy is dynamic: it names the user's own trough times, and when today's
+// forecast UV is high enough for cutaneous synthesis it says so.
+function dipWalkLine(p){
+  let troughTxt = 'the afternoon dip';
+  try{ const t = getDayWindows(p).find(w => w.name === 'trough');
+    if(t) troughTxt = 'roughly ' + fmt(t.start) + ' to ' + fmt(t.end); }catch(e){}
+  let s = `Your circadian low is ${troughTxt}. Ten minutes outside now blunts it. `
+        + 'Light is alerting through a different pathway than food, and it does not borrow from tonight.';
+  if(typeof p.uvToday === 'number' && p.uvToday >= 3) s += ` UV is ${Math.round(p.uvToday)} today, so this covers your vitamin D as well.`;
+  return s;
+}
+// The single "now" phase, by priority: dipWalk > supplement due > physicalPeak (only
+// when training is within 2h) > meal > cognitive > physicalPeak, falling back to a
+// steady gap, or sleep outside the waking day. There is never a moment nothing is true.
 function getCurrentPhase(h, p){
   const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
   if(wake == null || bed == null) return null;
@@ -1971,6 +1984,12 @@ function getCurrentPhase(h, p){
   if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
   const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && h >= s.window[0] && h < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
   if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
+  // physicalPeak outranks meals/cognitive only when a session is imminent (within 2h).
+  const tmapP = { morning:7, afternoon:14, evening:20 };
+  const trainH = (typeof p.trainingTime === 'number') ? p.trainingTime
+    : (p.trainingTime && tmapP[p.trainingTime] != null ? tmapP[p.trainingTime] : null);
+  const trainSoon = trainH != null && (trainH - h) >= 0 && (trainH - h) <= 2;
+  if(trainSoon && on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
   const meal = ['breakfast','lunch','mainMeal','postTraining'].map(n=>bn[n]).filter(Boolean).find(on);
   if(meal) return { key:meal.name, start:meal.start, end:meal.end };
   const cog = ['sleepInertia','deepWork','trough','secondWindow','windDown'].map(n=>bn[n]).filter(Boolean).find(on);
@@ -2000,7 +2019,7 @@ function stateCard(h, p){
   if(!ph) return '';
   let name, line;
   if(ph.key === 'supplement'){ const s = ph.sup; name = (SHORT_NAME[s.key]||s.name) + ', due'; line = 'Take ' + s.dose + ' now.'; }
-  else { name = WINDOW_NAME[ph.key] || ph.key; line = WINDOW_LINE[ph.key] || ''; }
+  else { name = WINDOW_NAME[ph.key] || ph.key; line = ph.key === 'dipWalk' ? dipWalkLine(p) : (WINDOW_LINE[ph.key] || ''); }
   const timeRange = ph.key === 'sleep' ? '' : fmt(ph.start) + '–' + fmt(ph.end);
   const dur = ph.end - ph.start, pctv = dur > 0 ? Math.max(0, Math.min(100, ((h - ph.start) / dur) * 100)) : 0;
   const rem = Math.max(0, Math.round((ph.end - h) * 60));
@@ -2017,6 +2036,26 @@ function stateCard(h, p){
     ${showBar ? `<div class="now-window-bar"><div class="now-window-fill" style="width:${pctv}%;"></div></div>
     <div class="now-window-footer" style="margin-bottom:8px;">${remTxt} remaining</div>` : ''}
     ${nextTxt ? `<div class="now-window-footer">${nextTxt}</div>` : ''}
+  </div>`;
+}
+// Friday only: the lie-in trade, decided on Friday evening rather than Sunday.
+// Requires a real weekendWakeTime — if we do not have one we render nothing rather
+// than guessing a number.
+function fridayCard(){
+  const p = profile;
+  if(new Date().getDay() !== 5) return '';
+  const wake = p.wakeTime ?? p.wake, wkWake = p.weekendWakeTime;
+  if(wake == null || wkWake == null) return '';
+  const gap = wkWake - wake;
+  if(!(gap >= 1.5)) return '';
+  const capped = wake + 1;                       // cap the lie-in at an hour
+  const costMin = Math.round((wkWake - capped) * 60);
+  const WORDS = { 30:'thirty minutes', 45:'forty-five minutes', 60:'an hour', 75:'seventy-five minutes',
+                  90:'ninety minutes', 105:'an hour and three quarters', 120:'two hours' };
+  const cost = WORDS[costMin] || (costMin + ' minutes');
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">tomorrow's lie-in</div>
+    <div style="font-size:14px;color:var(--ink);line-height:1.6;">Waking at ${fmt(capped)} tomorrow instead of ${fmt(wkWake)} costs you ${cost} and saves you Monday. Take the extra sleep at the front of the night instead.</div>
   </div>`;
 }
 function dayStripCard(){
@@ -3655,8 +3694,40 @@ function showProtocolTab(){
     </div>
     ${cards}
     ${stackExtrasHTML(diagnosis)}
+    ${dayStructureSection()}
     <div style="height:20px;"></div>
   `;
+}
+
+// Protocol tab reference list: every window with times, grouped meals / recovery /
+// cognitive. Reference material, not a daily check.
+function dayStructureSection(){
+  let wins; try{ wins = getDayWindows(profile); }catch(e){ return ''; }
+  if(!wins || !wins.length) return '';
+  const GROUPS = [
+    ['meals', ['breakfast','lunch','mainMeal','postTraining']],
+    ['recovery', ['dipWalk','windDown']],
+    ['cognitive', ['sleepInertia','deepWork','trough','secondWindow','physicalPeak']]
+  ];
+  const bn = {}; wins.forEach(w => bn[w.name] = w);
+  const blocks = GROUPS.map(([label, names]) => {
+    const rows = names.map(n => bn[n]).filter(Boolean).sort((a,b)=>a.start-b.start).map(w => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:0.5px solid var(--sep);">
+        <span style="font-size:13px;color:var(--ink);">${WINDOW_NAME[w.name] || w.name}</span>
+        <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0;">${fmt(w.start)}–${fmt(w.end)}</span>
+      </div>`).join('');
+    if(!rows) return '';
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:9.5px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">${label}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+  if(!blocks) return '';
+  return `<div style="padding:16px 0 6px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">day structure</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;">Derived from your wake, bed and training times.</div>
+    </div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:14px 18px 2px;margin-bottom:16px;">${blocks}</div>`;
 }
 
 function showProgressTab(){
