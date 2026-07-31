@@ -1921,10 +1921,10 @@ function contradictionInner(r){
       <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">the contradiction</div>
       <span style="font-size:9px;color:${g.color};border:0.5px solid ${g.color};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;flex-shrink:0;">${g.label}</span>
     </div>
-    <div style="font-size:15px;font-weight:500;color:var(--ink);line-height:1.5;margin-bottom:10px;">${r.contradiction}</div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${r.mechanism}</div>
+    <div style="font-size:13px;font-weight:500;color:var(--ink);line-height:1.55;margin-bottom:10px;">${r.contradiction}</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${r.mechanism}</div>
     <div style="display:flex;flex-direction:column;gap:9px;">
-      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.5;">${f.action}</span></div>`).join('')}
+      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.7);line-height:1.55;">${f.action}</span></div>`).join('')}
     </div>`;
 }
 
@@ -2031,7 +2031,6 @@ function stateCard(h, p){
   let name, line;
   if(ph.key === 'supplement'){ const s = ph.sup; name = (SHORT_NAME[s.key]||s.name) + ', due'; line = 'Take ' + s.dose + ' now.'; }
   else { name = WINDOW_NAME[ph.key] || ph.key; line = ph.key === 'dipWalk' ? dipWalkLine(p) : (WINDOW_LINE[ph.key] || ''); }
-  const timeRange = ph.key === 'sleep' ? '' : fmt(ph.start) + '–' + fmt(ph.end);
   const dur = ph.end - ph.start, pctv = dur > 0 ? Math.max(0, Math.min(100, ((h - ph.start) / dur) * 100)) : 0;
   const rem = Math.max(0, Math.round((ph.end - h) * 60));
   const remTxt = rem >= 60 ? Math.floor(rem/60) + 'h' + (rem%60 ? ' ' + (rem%60) + 'm' : '') : rem + 'm';
@@ -2039,9 +2038,8 @@ function stateCard(h, p){
   const nx = nextThing(ph.end, p);
   const nextTxt = nx ? `next: ${String(nx.name).toLowerCase()} at ${fmt(nx.time)}` : '';
   return `<div class="now-card" style="margin-bottom:12px;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px;">
+    <div style="margin-bottom:7px;">
       <span class="now-window-label" style="margin-bottom:0;">now · ${name}</span>
-      ${timeRange ? `<span style="font-size:11px;color:rgba(237,233,225,0.4);flex-shrink:0;">${timeRange}</span>` : ''}
     </div>
     <div class="now-window-desc" style="margin-bottom:${showBar ? '12' : '10'}px;">${line}</div>
     ${showBar ? `<div class="now-window-bar"><div class="now-window-fill" style="width:${pctv}%;"></div></div>
@@ -2161,10 +2159,11 @@ function weekPlanCard(){
   if(!plan || !plan.days || plan.days.length < 2) return '';
   const cols = plan.days.map((d,i)=>{
     const hedged = i >= 3;                                   // days 4-7 recede
+    const isToday = i === 0;                                 // forecast[0] is today
     const sug = d.suggestion==='rest' ? 'rest' : (d.outside ? 'outside' : 'train');
     const sugColor = sug==='rest' ? 'var(--muted)' : sug==='outside' ? 'var(--orange)' : 'var(--ink)';
-    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;${hedged?'opacity:0.5;':''}">
-      <div style="font-size:9.5px;letter-spacing:0.05em;color:var(--muted);text-transform:uppercase;">${d.name}</div>
+    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;${hedged?'opacity:0.5;':''}${isToday?'background:rgba(26,22,18,0.06);border-radius:8px;padding:6px 0 5px;margin:-6px 0 -5px;':''}">
+      <div style="font-size:9.5px;letter-spacing:0.05em;color:${isToday?'var(--ink)':'var(--muted)'};text-transform:uppercase;font-weight:${isToday?'700':'400'};">${d.name}</div>
       <div style="height:15px;line-height:0;">${_wxGlyph(d)}</div>
       <div style="font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;">${d.tmax!=null?Math.round(d.tmax)+'°':'&nbsp;'}</div>
       <div style="font-size:9.5px;font-weight:600;color:${sugColor};letter-spacing:0.01em;">${sug}</div>
@@ -2986,8 +2985,7 @@ const RULES = [
       'Consistently demonstrated — vegetarians show greater increases in ' +
       'muscle creatine and performance than omnivores.',
     fixes: [
-      { cost: 'free', action: 'No free fix for this one, dietary creatine comes almost entirely from meat and fish.' },
-      { cost: 8, action: '3-5g creatine monohydrate daily. Cheapest high-evidence supplement available.' }
+      { cost: 'free', action: 'No free fix for this one, dietary creatine comes almost entirely from meat and fish.' }
     ],
     surprise: 7
   },
