@@ -498,7 +498,12 @@ const steps=[
     <input class="field-input" id="f-coffee" type="time" value="${noCoffee?'':toHM(profile.lastCoffeeTime)}"${noCoffee?' disabled':''}>
     <div class="chip-group" id="g-nocoffee">
       <div class="chip${noCoffee?' sel-ink':''}" data-val="none" onclick="toggleChipSup(this);document.getElementById('f-coffee').disabled=this.classList.contains('sel-ink')">I don't drink coffee</div>
-    </div>`;
+    </div>
+    <div class="field-label" style="margin-top:8px;">on a free day, your natural wake time</div>
+    <input class="field-input" id="f-wkwake" type="time" value="${toHM(profile.weekendWakeTime)}">
+    <div class="field-label">on a free day, when do you actually go to sleep?</div>
+    <input class="field-input" id="f-wkbed" type="time" value="${toHM(profile.weekendBedTime)}">
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:4px;line-height:1.5;">a day with no alarm, not necessarily the weekend. this sets your chronotype.</div>`;
    },
    save:()=>{
      const toDec=v=>{if(!v)return null;const a=v.split(':').map(Number);return a[0]+(a[1]||0)/60;};
@@ -506,6 +511,9 @@ const steps=[
      if(wt!=null){profile.wakeTime=wt;profile.wake=wt;}
      if(bt!=null){profile.bedTime=bt;profile.bed=bt;}
      profile.lastCoffeeTime=document.querySelector('#g-nocoffee .sel-ink')?null:toDec(document.getElementById('f-coffee').value);
+     const wkw=toDec(document.getElementById('f-wkwake').value), wkb=toDec(document.getElementById('f-wkbed').value);
+     if(wkw!=null) profile.weekendWakeTime=wkw;   // stored 24h decimal; 00:45 -> 0.75 (see computeChronotype wraparound)
+     if(wkb!=null) profile.weekendBedTime=wkb;
    }
   },
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
@@ -1477,6 +1485,32 @@ function drawClock(h){
   // Inner face
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
 
+  // Chronotype: biological vs actual sleep window on an inner track, sitting under the
+  // ring and markers. Bio window is wide and soft with ~45-min gradient edges (a
+  // population estimate, not precise); actual window is thinner and crisper. Where they
+  // diverge the offset shows without any label.
+  {
+    const ct = (typeof computeChronotype==='function') ? computeChronotype(profile) : null;
+    if(ct){
+      const trackR = inner + (r - SW/2 - inner) * 0.78;
+      const angc = hh => (hh/24)*Math.PI*2 - Math.PI/2;
+      const smooth = k => { k=Math.max(0,Math.min(1,k)); return k*k*(3-2*k); };
+      const arcBand = (hA, hB, width, rgb, peak, fade) => {
+        const dur = hoursUntil(hA, hB); if(dur<=0) return;
+        const N = Math.max(6, Math.round(dur/0.08));
+        for(let i=0;i<N;i++){
+          const f0=i/N, f1=(i+1)/N, off=dur*((f0+f1)/2);
+          const al = peak * smooth(Math.min(off, dur-off)/fade);
+          if(al<=0.002) continue;
+          ctx.beginPath();ctx.arc(cx,cy,trackR, angc(hA+dur*f0)-0.004, angc(hA+dur*f1)+0.004);
+          ctx.strokeStyle=`rgba(${rgb},${al})`;ctx.lineWidth=width;ctx.lineCap='butt';ctx.stroke();
+        }
+      };
+      arcBand(ct.bioBedTime, ct.bioWakeTime, 6*dpr, '48,52,66', 0.16, 0.75);   // biological: soft, wide
+      arcBand(ct.bedTime,    ct.wakeTime,    3*dpr, '26,22,18', 0.42, 0.20);   // actual: crisp, thinner
+    }
+  }
+
   // Sunrise / sunset ticks across the ring, with the times in small type just outside
   // and a tiny sunrise/sunset glyph beyond each.
   if(hasSun){
@@ -1599,7 +1633,7 @@ function drawClock(h){
 
   // Hour figures — 0 / 6h / 12h / 18h in the gap between the inner face and the ring.
   {
-    const bandMid = inner + (r - SW/2 - inner) / 2;
+    const bandMid = inner + (r - SW/2 - inner) * 0.3;   // inner part of the gap, clear of the sleep track
     ctx.font=`500 ${11*dpr}px Switzer,sans-serif`;
     ctx.fillStyle='rgba(26,22,18,0.34)';
     ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1760,8 +1794,12 @@ const DAILY_QUESTIONS = [
     sub:'Protein distribution across the day drives repair, not just the daily total.',
     options:['yes','no'], vals:['yes','no'], toProfile:a=>a==='yes' },
   { field:'weekendWakeTime', type:'time',
-    title:'What time do you wake at the weekend?',
-    sub:'A lie-in of 2+ hours gives you jet lag every Saturday.',
+    title:'On a free day with no alarm, when do you wake?',
+    sub:'Your natural wake time, not the workday one.',
+    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
+  { field:'weekendBedTime', type:'time',
+    title:'On a free day with no alarm, when do you go to sleep?',
+    sub:'Your natural bedtime. With your free-day wake time, this sets your chronotype.',
     toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
   { field:'screensBeforeBed', type:'chips',
     title:'Screen time in the last hour before bed?',
@@ -2150,6 +2188,41 @@ const sleepDuration = (p) =>
     ? p.sleepHours
     : (p.bedTime != null && p.wakeTime != null ? hoursUntil(p.bedTime, p.wakeTime) : null);
 
+// ── CHRONOTYPE (Munich ChronoType Questionnaire method; Roenneberg) ──────────
+// Two data points are a proxy, not a measurement, so everything downstream stays
+// "roughly". All arithmetic wraps around midnight (a 01:00 bedtime is 1.0, not 25.0).
+const norm24 = x => ((x % 24) + 24) % 24;
+// Signed shortest circular difference a-b, in (-12, 12].
+const circDiff = (a, b) => { let d = (a - b) % 24; if (d > 12) d -= 24; if (d <= -12) d += 24; return d; };
+function computeChronotype(p){
+  const bedTime = p.bedTime ?? p.bed, wakeTime = p.wakeTime ?? p.wake;
+  const wkBed = p.weekendBedTime, wkWake = p.weekendWakeTime;
+  if(bedTime == null || wakeTime == null || wkBed == null || wkWake == null) return null;
+  const SDw = hoursUntil(bedTime, wakeTime);        // work-day sleep duration (wraps)
+  const SDf = hoursUntil(wkBed, wkWake);            // free-day sleep duration (wraps)
+  const MSW = norm24(bedTime + SDw / 2);
+  const MSF = norm24(wkBed + SDf / 2);
+  // Sleep-corrected mid-sleep: people oversleep on free days to repay weekday debt,
+  // which pushes MSF later than their true chronotype. Remove it. Skip when they
+  // sleep LESS on free days (correction would be meaningless) — a low-confidence read.
+  const sleepsLessFree = SDf < SDw;
+  const MSFsc = SDf > SDw ? norm24(MSF - 0.5 * (SDf - SDw)) : MSF;
+  const socialJetlag = Math.abs(circDiff(MSF, MSW));
+  // Biological window: their own free-day duration, centred on MSFsc.
+  const bioBedTime = norm24(MSFsc - SDf / 2);
+  const bioWakeTime = norm24(MSFsc + SDf / 2);
+  const bedGap = circDiff(bioBedTime, bedTime);     // + earlier than bio, - too late
+  const wakeGap = circDiff(bioWakeTime, wakeTime);  // + they wake too early
+  const noVariation = Math.abs(circDiff(MSF, MSW)) < 0.25 && Math.abs(SDf - SDw) < 0.25;
+  return { SDw, SDf, MSW, MSF, MSFsc, socialJetlag, bioBedTime, bioWakeTime, bedTime, wakeTime,
+           bedGap, wakeGap, lowConfidence: sleepsLessFree || noVariation, noVariation };
+}
+// Spectrum descriptor from MSFsc — never rendered as a bare category, always with the time.
+function chronotypeDescriptor(msfsc){
+  return msfsc < 2.5 ? 'early' : msfsc < 3.5 ? 'moderately early' : msfsc < 4.5 ? 'intermediate'
+    : msfsc < 5.5 ? 'moderately late' : 'late';
+}
+
 const RULES = [
 
   {
@@ -2200,27 +2273,61 @@ const RULES = [
     surprise: 8
   },
 
+  // Supersedes the old crude weekend-wake-delta 'social-jetlag' rule with the MCTQ
+  // gap between biological and actual sleep timing.
   {
-    id: 'social-jetlag',
+    id: 'chronotype-mismatch',
     domain: 'circadian',
-    requires: ['wakeTime', 'weekendWakeTime'],
-    fires: (p) => (p.weekendWakeTime - p.wakeTime) >= 1.5,
+    requires: ['bedTime', 'wakeTime', 'weekendBedTime', 'weekendWakeTime'],
+    fires: (p) => { const c = computeChronotype(p); return !!c && Math.abs(c.bedGap) >= 1; },
     contradiction:
-      'You sleep in at the weekend to repay the week. It is not repayment: ' +
-      'you are giving yourself jet lag every Saturday.',
+      'Your mid-sleep on free days is {MSFsc}. Your body is asking for roughly ' +
+      '{bioBedTime} to {bioWakeTime}. On a work day you run {bedTime} to {wakeTime}. ' +
+      'That is a {gap} offset, every working day.',
     mechanism:
-      'A weekend shift of 2+ hours moves your circadian phase in the same way ' +
-      'crossing time zones does. Sunday night insomnia and Monday fog are the ' +
-      'symptoms of flying back.',
+      'Chronotype is largely biological, not a habit. Living outside your window ' +
+      'produces the same physiological pattern as crossing time zones, which is why ' +
+      'Monday feels the way it does.',
     evidence: 'MODERATE-STRONG',
     citation:
-      'Roenneberg et al. — social jetlag associated with metabolic and mood ' +
-      'outcomes. Observational; causal direction is not fully settled.',
+      'Roenneberg, Munich ChronoType Questionnaire. Chronotype and social jetlag ' +
+      'are well characterised; the health associations are observational and causal ' +
+      'direction is not fully settled.',
+    values: (p) => {
+      const c = computeChronotype(p);
+      const r15 = t => fmt(norm24(Math.round(t * 4) / 4));       // nearest 15 min, never to the minute
+      const g = Math.abs(c.bedGap), gh = Math.floor(g), gm = Math.round((g - gh) * 60);
+      const gap = gm >= 60 ? (gh + 1) + 'h' : gh > 0 ? (gm > 0 ? gh + 'h ' + gm + 'm' : gh + 'h') : gm + 'm';
+      return { MSFsc: r15(c.MSFsc) + ' (' + chronotypeDescriptor(c.MSFsc) + ')',
+               bioBedTime: r15(c.bioBedTime), bioWakeTime: r15(c.bioWakeTime),
+               bedTime: fmt(norm24(c.bedTime)), wakeTime: fmt(norm24(c.wakeTime)), gap };
+    },
     fixes: [
-      { cost: 'free', action: 'Cap the weekend lie-in at one hour. Nap in the afternoon instead if you need it.' },
-      { cost: 'free', action: 'Consistency of wake time matters more than total duration.' }
+      { cost: 'free', action: 'Hold your wake time fixed. Wake consistency is what stabilises the rhythm, and it is usually the part you cannot move anyway.' },
+      { cost: 'free', action: 'Move bedtime earlier in 15 minute steps, not one jump. Your system shifts about 15-30 minutes a day.' },
+      { cost: 'free', action: 'Morning light within an hour of waking pulls your whole window earlier. It is the only lever that moves chronotype rather than fighting it.' }
     ],
-    surprise: 8
+    surprise: 9
+  },
+
+  {
+    id: 'chronotype-aligned',
+    domain: 'circadian',
+    requires: ['bedTime', 'wakeTime', 'weekendBedTime', 'weekendWakeTime'],
+    // "within half an hour" includes exactly 30 min, so <= 0.5 (matches the copy).
+    fires: (p) => { const c = computeChronotype(p); return !!c && Math.abs(c.bedGap) <= 0.5; },
+    contradiction:
+      'Your work schedule and your biological window line up within half an hour. ' +
+      'That is unusual and worth protecting.',
+    mechanism:
+      'When chronotype and schedule agree you are not paying the daily circadian ' +
+      'tax most people do. It is the quiet advantage behind easy mornings.',
+    evidence: 'MODERATE-STRONG',
+    citation: 'Roenneberg, Munich ChronoType Questionnaire.',
+    fixes: [
+      { cost: 'free', action: 'Whatever else changes, keep the wake time.' }
+    ],
+    surprise: 5
   },
 
   {
@@ -3095,7 +3202,7 @@ function toContradictionProfile(p){
   if(e.wakeTime==null && p.wake!=null) e.wakeTime = p.wake;
   if(e.bedTime==null && p.bed!=null) e.bedTime = p.bed;
   // Direct pass-throughs once collected (added by later onboarding steps):
-  ['wakeTime','bedTime','lastCoffeeTime','weekendWakeTime','magnesiumForm','morningLight',
+  ['wakeTime','bedTime','lastCoffeeTime','weekendWakeTime','weekendBedTime','magnesiumForm','morningLight',
    'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
    'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours',
    'antihistamineGen','workStart','workEnd',
