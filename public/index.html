@@ -1338,8 +1338,6 @@ function buildDash(){
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
 
   document.getElementById('dash-body').innerHTML=`
-    ${stateCard(h, profile)}
-
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
       <div class="arc-ring-wrap" style="position:relative;">
@@ -2014,38 +2012,6 @@ function getCurrentPhase(h, p){
     return { key:'neutral', start, end };
   }
   return { key:'sleep', start:bed, end:wake };
-}
-// The next thing that begins at or after `after`: a window or an untaken dose.
-function nextThing(after, p){
-  let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
-  const cands = [];
-  wins.filter(w => w.name !== 'neutral').forEach(w => cands.push({ name:WINDOW_NAME[w.name] || w.name, time:w.start }));
-  (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key))
-    .forEach(s => cands.push({ name:(SHORT_NAME[s.key]||s.name), time:s.window[0] }));
-  return cands.filter(c => c.time >= after - 0.001).sort((a,b)=>a.time-b.time)[0] || null;
-}
-// Always-on state card: plain language for what is happening now and what to do.
-function stateCard(h, p){
-  const ph = getCurrentPhase(h, p);
-  if(!ph) return '';
-  let name, line;
-  if(ph.key === 'supplement'){ const s = ph.sup; name = (SHORT_NAME[s.key]||s.name) + ', due'; line = 'Take ' + s.dose + ' now.'; }
-  else { name = WINDOW_NAME[ph.key] || ph.key; line = ph.key === 'dipWalk' ? dipWalkLine(p) : (WINDOW_LINE[ph.key] || ''); }
-  const dur = ph.end - ph.start, pctv = dur > 0 ? Math.max(0, Math.min(100, ((h - ph.start) / dur) * 100)) : 0;
-  const rem = Math.max(0, Math.round((ph.end - h) * 60));
-  const remTxt = rem >= 60 ? Math.floor(rem/60) + 'h' + (rem%60 ? ' ' + (rem%60) + 'm' : '') : rem + 'm';
-  const showBar = ph.key !== 'sleep' && ph.key !== 'neutral' && dur > 0;
-  const nx = nextThing(ph.end, p);
-  const nextTxt = nx ? `next: ${String(nx.name).toLowerCase()} at ${fmt(nx.time)}` : '';
-  return `<div class="now-card" style="margin-bottom:12px;">
-    <div style="margin-bottom:7px;">
-      <span class="now-window-label" style="margin-bottom:0;">now · ${name}</span>
-    </div>
-    <div class="now-window-desc" style="margin-bottom:${showBar ? '12' : '10'}px;">${line}</div>
-    ${showBar ? `<div class="now-window-bar"><div class="now-window-fill" style="width:${pctv}%;"></div></div>
-    <div class="now-window-footer" style="margin-bottom:8px;">${remTxt} remaining</div>` : ''}
-    ${nextTxt ? `<div class="now-window-footer">${nextTxt}</div>` : ''}
-  </div>`;
 }
 // Friday only: the lie-in trade, decided on Friday evening rather than Sunday.
 // Requires a real weekendWakeTime — if we do not have one we render nothing rather
