@@ -1738,6 +1738,57 @@ function getWindows(p){
   return windows;
 }
 
+// ── DAY STRUCTURE ────────────────────────────────────────────────────────────
+// Meal/recovery windows anchor to wake & training; cognitive windows anchor to
+// wake/bed and shift with chronotype (MSFsc offset, capped ±1.5h). Everything
+// derives from wakeTime/bedTime/trainingTime — never fixed clock hours.
+// trainingTime may be a decimal hour or one of morning/afternoon/evening.
+function getDayWindows(p){
+  const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
+  if(wake == null || bed == null) return [];
+  const tmap = { morning:7, afternoon:14, evening:20 };
+  let train = (typeof p.trainingTime === 'number') ? p.trainingTime
+            : (p.trainingTime && tmap[p.trainingTime] != null ? tmap[p.trainingTime] : null);
+  if(p.trainingFreq === 'rest' || p.restDay === true) train = null;   // explicit rest day
+
+  // Chronotype offset — cognitive phases only, and only the wake-anchored ones.
+  let off = 0;
+  const ct = (typeof computeChronotype === 'function') ? computeChronotype(p) : null;
+  if(ct && ct.MSFsc != null) off = Math.max(-1.5, Math.min(1.5, ct.MSFsc - 4.0));
+
+  const wins = [];
+  const add = (name, category, start, end, level) => {
+    if(start >= bed) return;            // window landing after bedtime → suppress
+    wins.push({ name, category, level: level || null, start, end });
+  };
+
+  // Cognitive (wake-anchored, offset by chronotype). windDown is bed-anchored, so
+  // it is NOT offset — offsetting it would push it past bedtime and suppress it.
+  add('sleepInertia', 'cognitive', wake + off,       wake + 0.75 + off, 'STRONG');
+  add('deepWork',     'cognitive', wake + 2 + off,   wake + 4.5 + off,  'MODERATE');
+  add('trough',       'cognitive', wake + 6 + off,   wake + 8 + off,    'STRONG');
+  add('secondWindow', 'cognitive', wake + 8.5 + off, wake + 10.5 + off, 'MODERATE');
+  add('physicalPeak', 'cognitive', wake + 10 + off,  wake + 11.5 + off, 'MODERATE-STRONG');
+  add('windDown',     'cognitive', bed - 1.5,        bed,               'MODERATE');
+
+  // Meals & recovery (anchored to wake / training, never offset).
+  add('breakfast', 'meal',     wake + 0.5, wake + 1.5,  null);
+  add('lunch',     'meal',     wake + 4,   wake + 5,    null);
+  add('dipWalk',   'recovery', wake + 5.5, wake + 5.75, null);
+  if(train != null){
+    if(train < wake + 7){
+      // Early training: main meal would collide with lunch. One meal after training, no post-training.
+      add('mainMeal', 'meal', train + 1.25, train + 2.25, null);
+    } else {
+      add('mainMeal',     'meal', train - 2.5,  train - 1.5,  null);
+      add('postTraining', 'meal', train + 1.25, train + 1.75, null);
+    }
+  } else {
+    add('mainMeal', 'meal', wake + 9, wake + 10, null);   // rest day / no training
+  }
+  return wins;
+}
+
 function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
 
 function getCurrentWindow(h,p){
