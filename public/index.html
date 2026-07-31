@@ -1458,8 +1458,22 @@ function drawClock(h){
     ctx.lineWidth=SW;ctx.lineCap='butt';ctx.stroke();
   }
 
-  // Thin track behind — draw full circle in very dark first
-  // (already rendered above, this gives depth)
+  // Dip-walk highlight — when the ~15-min walk window is open, brighten that arc so it
+  // reads as a window open now and closing. Renders nothing when inactive.
+  try{
+    const dw = getDayWindows(profile).find(w => w.name === 'dipWalk');
+    if(dw && h >= dw.start && h < dw.end){
+      const dwAng = hh => (hh/24)*Math.PI*2 - Math.PI/2;
+      const a0 = dwAng(dw.start), a1 = dwAng(dw.end);
+      const dp = (Math.sin(Date.now()/500) + 1) / 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
+      ctx.strokeStyle = `rgba(255,240,205,${0.14 + dp*0.14})`; ctx.lineWidth = SW + 9*dpr; ctx.stroke();  // glow
+      ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
+      ctx.strokeStyle = `rgba(255,249,230,${0.6 + dp*0.32})`; ctx.lineWidth = SW; ctx.stroke();           // bright core
+      ctx.lineCap = 'butt';
+    }
+  }catch(e){}
 
   // Inner face
   ctx.beginPath();ctx.arc(cx,cy,inner,0,Math.PI*2);ctx.fillStyle='#EDE9E1';ctx.fill();
