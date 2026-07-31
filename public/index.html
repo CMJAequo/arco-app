@@ -1556,11 +1556,16 @@ function drawClock(h){
   };
   // Personalised windows; anytime supplements (creatine) get no clock dot.
   const sups2 = (profile.supplements || []).map(k => supView(k)).filter(s => s && !s.anytime);
+  // Cluster doses that sit close together on the dial (not just identical times) so their
+  // dots and labels get fanned apart instead of overlapping.
+  const CLUSTER_H = 1.6;
   const hourGroups2 = {};
-  sups2.forEach(s => {
-    if(!hourGroups2[s.window[0]]) hourGroups2[s.window[0]] = [];
-    hourGroups2[s.window[0]].push(s.key);
+  [...sups2].sort((a,b) => a.window[0] - b.window[0]).forEach(s => {
+    const near = Object.keys(hourGroups2).find(k => Math.abs(parseFloat(k) - s.window[0]) < CLUSTER_H);
+    const key = near != null ? near : String(s.window[0]);
+    (hourGroups2[key] = hourGroups2[key] || []).push(s.key);
   });
+  const groupOf = s => Object.keys(hourGroups2).find(k => Math.abs(parseFloat(k) - s.window[0]) < CLUSTER_H) || String(s.window[0]);
 
   // Pulse factor — oscillates 0→1→0 over ~2 seconds
   const pulse = (Math.sin(Date.now() / 400) + 1) / 2;
@@ -1576,9 +1581,9 @@ function drawClock(h){
     const key = s.key;
     const taken2 = takenToday.includes(key);
     const isDue2 = hL >= s.window[0] && hL < s.window[1];
-    const group2 = hourGroups2[s.window[0]];
+    const group2 = hourGroups2[groupOf(s)] || [key];
     const idx2 = group2.indexOf(key);
-    const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 0.7 : 0;
+    const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 1.15 : 0;
     let supH = s.window[0] + spread2;
     // Treat each sun marker (tick + time label + icon) as one block and nudge a dot
     // angularly clear of it, to whichever side it already leans, so it never overlaps.
@@ -1940,7 +1945,9 @@ function getNextQuestion(){
 function evidenceGrade(ev){
   const s=String(ev);
   const label=['MODERATE-STRONG','STRONG','MODERATE','WEAK'].find(x=>s.startsWith(x))||'MODERATE';
-  const color=label==='STRONG'?'#4BB87B':label==='WEAK'?'rgba(26,22,18,0.3)':'rgba(26,22,18,0.45)';
+  // Well-evidenced grades read green; the softer green separates MODERATE-STRONG from STRONG.
+  const color=label==='STRONG'?'#4BB87B':label==='MODERATE-STRONG'?'#6BA886'
+    :label==='WEAK'?'rgba(26,22,18,0.3)':'rgba(26,22,18,0.45)';
   return {label,color};
 }
 function contradictionInner(r){
@@ -2121,12 +2128,23 @@ function dayStripCard(){
       labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
     }
   }
-  // Label row on top, strip row, then physicalPeak on its own line; now-line spans strip+peak.
-  return `<div style="margin:0 2px 12px;position:relative;padding-top:16px;">
-    ${labelHtml}
-    <div style="position:relative;height:30px;border-radius:6px;overflow:hidden;">${segHtml}${mealMarks}</div>
-    <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
-    ${nowHtml}
+  // Card wrapper: title above, then label row / strip / physicalPeak line, with a short
+  // legend so the encoding does not have to be guessed. now-line spans strip+peak.
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">your day</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">waking to bed, and how sharp you are across it.</div>
+    <div style="position:relative;padding-top:16px;">
+      ${labelHtml}
+      <div style="position:relative;height:30px;border-radius:6px;overflow:hidden;">${segHtml}${mealMarks}</div>
+      <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
+      ${nowHtml}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:10px;color:var(--muted);">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.sharp};"></span>focus peak</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.dull};"></span>dip</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid rgba(26,22,18,0.82);"></span>meals</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:3px;border-radius:2px;background:rgba(26,22,18,0.72);"></span>training window</span>
+    </div>
   </div>`;
 }
 
