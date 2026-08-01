@@ -481,13 +481,21 @@ const steps=[
    render:()=>`
     <div class="field-label">average sleep quality</div>
     <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.sleepQuality??3}" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">${profile.sleepQuality??3}</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
+    <div class="field-label">how many times do you wake in the night?</div>
+    <div class="chip-group" id="g-wakings">
+      ${[['0','none'],['1','once'],['2','twice'],['3','three or more']].map(([v,l])=>`<div class="chip${String(profile.nightWakings)===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-wakings','ink')">${l}</div>`).join('')}
+    </div>
     <div class="field-label">chronotype</div>
     <div class="chip-group" id="g-chrono">
       <div class="chip${profile.chronotype==='early'?' sel-ink':''}" data-val="early" onclick="selChip(this,'g-chrono','ink')">early bird</div>
       <div class="chip${profile.chronotype==='neutral'?' sel-ink':''}" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
       <div class="chip${profile.chronotype==='late'?' sel-ink':''}" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
     </div>`,
-   save:()=>{profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;profile.chronotype=getChip('g-chrono')||'neutral';}
+   save:()=>{
+     profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;
+     const nw=getChip('g-wakings'); if(nw!=null) profile.nightWakings=parseInt(nw);
+     profile.chronotype=getChip('g-chrono')||'neutral';
+   }
   },
   {title:'your day',sub:'timing is the highest-leverage thing we can fix. give us your real times.',
    render:()=>{
@@ -508,7 +516,13 @@ const steps=[
     <input class="field-input" id="f-wkwake" type="time" value="${toHM(profile.weekendWakeTime)}">
     <div class="field-label">on a free day, when do you actually go to sleep?</div>
     <input class="field-input" id="f-wkbed" type="time" value="${toHM(profile.weekendBedTime)}">
-    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:4px;line-height:1.5;">a day with no alarm, not necessarily the weekend. this sets your chronotype.</div>`;
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:12px;line-height:1.5;">a day with no alarm, not necessarily the weekend. this sets your chronotype.</div>
+    <div class="field-label">is that usually after a night out?</div>
+    <div class="chip-group" id="g-freealc">
+      <div class="chip${profile.freeDayAfterDrinking===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-freealc','ink')">no</div>
+      <div class="chip${profile.freeDayAfterDrinking===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-freealc','ink')">yes, usually</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-12px;line-height:1.5;">alcohol distorts free-day sleep, so we treat the chronotype estimate as rougher if it does.</div>`;
    },
    save:()=>{
      const toDec=v=>{if(!v)return null;const a=v.split(':').map(Number);return a[0]+(a[1]||0)/60;};
@@ -519,6 +533,7 @@ const steps=[
      const wkw=toDec(document.getElementById('f-wkwake').value), wkb=toDec(document.getElementById('f-wkbed').value);
      if(wkw!=null) profile.weekendWakeTime=wkw;   // stored 24h decimal; 00:45 -> 0.75 (see computeChronotype wraparound)
      if(wkb!=null) profile.weekendBedTime=wkb;
+     const fa=getChip('g-freealc'); if(fa!=null) profile.freeDayAfterDrinking = (fa==='yes');
    }
   },
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
@@ -2038,7 +2053,7 @@ function getCurrentPhase(h, p){
   const on = w => w && hL >= w.start && hL < w.end;
   if(on(bn.morningLight)) return { key:'morningLight', start:bn.morningLight.start, end:bn.morningLight.end };
   if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
-  const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && hL >= s.window[0] && hL < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
+  const due = activeSupplements(p).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && hL >= s.window[0] && hL < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
   if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
   // physicalPeak outranks meals/cognitive only when a session is imminent (within 2h).
   const tmapP = { morning:7, afternoon:14, evening:20 };
@@ -2337,6 +2352,23 @@ function showProfileTab(){
     </div>
     <div style="background:var(--card);border-radius:var(--radius);padding:4px 18px;margin-bottom:16px;">${rows}</div>
 
+    ${(() => {
+      const m = profile.setAside || {}, ids = Object.keys(m);
+      if(!ids.length) return '';
+      const label = { 'no-effect':'no difference', 'side-effects':'side effects', cost:'too expensive',
+                      forget:'too fiddly', other:'another reason', unspecified:'no reason given' };
+      return `<div class="week-section-label" style="margin-top:4px;">set aside</div>
+      <div style="background:var(--card);border-radius:var(--radius);padding:4px 18px;margin-bottom:16px;">
+        ${ids.map(id=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:0.5px solid var(--sep);">
+          <div style="min-width:0;">
+            <div style="font-size:13px;color:var(--ink);">${(SUPPLEMENTS[id]||{}).name||id}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">${label[m[id].reason]||m[id].reason}</div>
+          </div>
+          <span onclick="restoreSupplement('${id}')" style="font-size:11px;color:var(--orange);cursor:pointer;flex-shrink:0;">restore</span>
+        </div>`).join('')}
+      </div>`;
+    })()}
+
     <button onclick="openCityChange()"
       style="width:100%;padding:14px;border-radius:14px;border:0.5px solid var(--sep);background:transparent;color:var(--ink);font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;margin-bottom:10px;">
       change city
@@ -2451,6 +2483,46 @@ function personalizeWindow(key, p){
   const q = n => Math.round(n * 4) / 4;                          // snap to 15 min
   return [q(start), q(end)];
 }
+// ── SET ASIDE ("tried this, didn't work for me") ─────────────────────────────
+// The diagnosis output stays intact; suppression is a separate layer applied at render,
+// so re-running the diagnosis cannot silently resurrect something the user rejected.
+function isSetAside(id, p){ const m=((p||profile).setAside)||{}; return !!m[id]; }
+function activeSupplements(p){ p=p||profile; return (p.supplements||[]).filter(id=>!isSetAside(id,p)); }
+const SET_ASIDE_REASONS = [
+  ['no-effect',    'I felt no difference'],
+  ['side-effects', 'It gave me side effects'],
+  ['cost',         'Too expensive'],
+  ['forget',       'Too fiddly to keep up'],
+  ['other',        'Another reason']
+];
+window.openSetAside = function(id){
+  const s = SUPPLEMENTS[id]; if(!s) return;
+  document.getElementById('ci-question-title').textContent = 'Set aside ' + s.name.toLowerCase() + '?';
+  document.getElementById('ci-question-sub').textContent = 'It comes off your protocol. Tell us why so the advice can improve.';
+  document.getElementById('ci-question-body').innerHTML =
+    `<div class="chip-group" id="g-setaside" style="margin-top:6px;">${SET_ASIDE_REASONS.map(([v,l])=>
+      `<div class="chip" data-val="${v}" onclick="selChip(this,'g-setaside','ink')">${l}</div>`).join('')}</div>`;
+  const btn = document.getElementById('ci-action-btn');
+  btn.textContent = 'set aside'; btn.setAttribute('onclick', `confirmSetAside('${id}')`);
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('checkin-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+window.confirmSetAside = function(id){
+  const reason = getChip('g-setaside') || 'unspecified';
+  profile.setAside = profile.setAside || {};
+  profile.setAside[id] = { reason, date: new Date().toDateString() };
+  try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote();
+  saveCheckinRemote('set-aside:' + id, reason);   // records that the advice failed for them
+  closeCheckin(); buildDash();
+};
+window.restoreSupplement = function(id){
+  if(profile.setAside) delete profile.setAside[id];
+  try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote();
+  showProfileTab();
+};
 // A render-ready supplement: KB data with its window personalised and an anytime flag.
 function supView(key, p){
   const s = SUPPLEMENTS[key]; if(!s) return null;
@@ -2503,8 +2575,11 @@ function computeChronotype(p){
   const bedGap = circDiff(bioBedTime, bedTime);     // + earlier than bio, - too late
   const wakeGap = circDiff(bioWakeTime, wakeTime);  // + they wake too early
   const noVariation = Math.abs(circDiff(MSF, MSW)) < 0.25 && Math.abs(SDf - SDw) < 0.25;
+  // Free-day sleep only reflects biology if alcohol is not distorting it.
+  const alcoholDistorted = p.freeDayAfterDrinking === true;
   return { SDw, SDf, MSW, MSF, MSFsc, socialJetlag, bioBedTime, bioWakeTime, bedTime, wakeTime,
-           bedGap, wakeGap, lowConfidence: sleepsLessFree || noVariation, noVariation };
+           bedGap, wakeGap, lowConfidence: sleepsLessFree || noVariation || alcoholDistorted,
+           noVariation, alcoholDistorted };
 }
 // How much sleep timing moves between work days and free days: the larger of the wake
 // shift and the bed shift, wrapping around midnight. A proxy for the Sleep Regularity
@@ -2579,9 +2654,9 @@ const RULES = [
     requires: ['bedTime', 'wakeTime', 'weekendBedTime', 'weekendWakeTime'],
     fires: (p) => { const c = computeChronotype(p); return !!c && Math.abs(c.bedGap) >= 1; },
     contradiction:
-      'Your mid-sleep on free days is {MSFsc}. Your body is asking for roughly ' +
-      '{bioBedTime} to {bioWakeTime}. On a work day you run {bedTime} to {wakeTime}. ' +
-      'That is a {gap} offset, every working day.',
+      '{hedge}Your mid-sleep on free days is {MSFsc}. Your body appears to be asking ' +
+      'for roughly {bioBedTime} to {bioWakeTime}. On a work day you run {bedTime} to ' +
+      '{wakeTime}. That is about a {gap} offset, every working day.',
     mechanism:
       'Chronotype is largely biological, not a habit. Living outside your window ' +
       'produces the same physiological pattern as crossing time zones, which is why ' +
@@ -2596,7 +2671,11 @@ const RULES = [
       const r15 = t => fmt(norm24(Math.round(t * 4) / 4));       // nearest 15 min, never to the minute
       const g = Math.abs(c.bedGap), gh = Math.floor(g), gm = Math.round((g - gh) * 60);
       const gap = gm >= 60 ? (gh + 1) + 'h' : gh > 0 ? (gm > 0 ? gh + 'h ' + gm + 'm' : gh + 'h') : gm + 'm';
-      return { MSFsc: r15(c.MSFsc) + ' (' + chronotypeDescriptor(c.MSFsc) + ')',
+      const hedge = c.alcoholDistorted
+        ? 'Taking your free-day sleep at face value, though you said it usually follows a night out, which distorts it. '
+        : c.lowConfidence ? 'This is a rough read, since your work and free days barely differ. ' : '';
+      return { hedge,
+               MSFsc: r15(c.MSFsc) + ' (' + chronotypeDescriptor(c.MSFsc) + ')',
                bioBedTime: r15(c.bioBedTime), bioWakeTime: r15(c.bioWakeTime),
                bedTime: fmt(norm24(c.bedTime)), wakeTime: fmt(norm24(c.wakeTime)), gap };
     },
@@ -3618,7 +3697,7 @@ function buildSupplementCard(h, p) {
 }
 
 function buildProtocolCard(h, p){
-  const sups = p.supplements || [];
+  const sups = activeSupplements(p);
   if(!sups.length) return '';
   h = dayH(h, p);                                 // linear line: post-midnight bedtimes
   const all = sups.map(key => supView(key, p)).filter(s => s && s.name);
@@ -3657,6 +3736,7 @@ function buildProtocolCard(h, p){
       <div style="font-size:11px;color:var(--muted);margin-top:6px;">
         <a href="${s.examine_url}" style="color:var(--orange);text-decoration:none;" target="_blank">view evidence on Examine.com →</a>
       </div>
+      <div onclick="event.stopPropagation();openSetAside('${s.key}')" style="font-size:11px;color:var(--muted);margin-top:10px;padding-top:9px;border-top:0.5px solid var(--sep);cursor:pointer;">tried this, didn't work for me →</div>
     </div>`;
 
     return `<div id="${rowId}" style="padding:10px 0;border-bottom:0.5px solid var(--sep);opacity:${rowOpacity};transition:opacity 0.2s;">
