@@ -353,35 +353,10 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 // ── SUPABASE CLIENT ──
 const _supabase = supabase.createClient('https://fksvvkviffzbwrotyqco.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrc3Z2a3ZpZmZ6Yndyb3R5cWNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzEyMzMsImV4cCI6MjEwMDkwNzIzM30.YHozwUFNOPIDncKj9vwLpEFTb7-yv7K-u5RGmU0pi84');
 
-// ── HORMONE ENGINE ──
-const CURVES={
-  cortisol:[[0,.10],[2,.08],[4,.18],[5.5,.45],[6.5,.82],[7.5,.95],[9,.90],[11,.78],[13,.60],[15,.42],[17,.35],[19,.25],[21,.15],[22,.10],[24,.10]],
-  melatonin:[[0,.88],[2,.92],[4,.75],[5.5,.40],[7,.10],[9,.04],[14,.04],[17,.06],[19,.18],[21,.52],[22,.78],[23,.88],[24,.88]],
-  testosterone:[[0,.30],[2,.55],[4,.82],[6,.95],[7.5,1.00],[9,.92],[11,.80],[13,.68],[15,.55],[17,.50],[19,.42],[21,.35],[22,.30],[24,.30]],
-};
-function lerp(a,b,t){return a+(b-a)*t;}
-function clamp(v){return Math.min(1,Math.max(0,v));}
-function baseVal(name,h){
-  const c=CURVES[name];
-  for(let i=0;i<c.length-1;i++){if(h>=c[i][0]&&h<c[i+1][0]){const t=(h-c[i][0])/(c[i+1][0]-c[i][0]);return lerp(c[i][1],c[i+1][1],t);}}
-  return c[c.length-1][1];
-}
-function getHormones(h,p,mod={}){
-  const wake=p.wake??7,sq=p.sleepQuality??3,stress=p.stress??2,train=p.trainingTime??'afternoon',caff=p.caffeine??'morning',age=parseInt(p.age)||25;
-  let cor=baseVal('cortisol',h),mel=baseVal('melatonin',h),tes=baseVal('testosterone',h);
-  cor=clamp(cor-(wake-7)*0.04);
-  const sw=h-wake;if(sw>=0&&sw<0.5)cor=clamp(cor+0.18*(1-sw/0.5));
-  const sqD=(sq-3)*0.07;cor=clamp(cor+sqD);tes=clamp(tes+sqD*0.8);mel=clamp(mel-sqD*0.2);
-  const stD=(stress-2)*0.055;if(h>10&&h<22)cor=clamp(cor+stD);mel=clamp(mel-stD*0.25);
-  if(train==='morning'&&h>=6&&h<=10)tes=clamp(tes+0.09);
-  if(train==='afternoon'&&h>=15&&h<=19){tes=clamp(tes+0.10);cor=clamp(cor+0.05);}
-  if(train==='evening'&&h>=18&&h<=21){tes=clamp(tes+0.07);mel=clamp(mel-0.12);}
-  const agD=age<25?0.05:age>35?-0.08:-(age-25)*0.008;tes=clamp(tes+agD);
-  if(caff==='afternoon'&&h>=19)mel=clamp(mel-0.10);
-  if(caff==='evening'&&h>=18)mel=clamp(mel-0.22);
-  cor=clamp(cor+(mod.cortisol??0));mel=clamp(mel+(mod.melatonin??0));tes=clamp(tes+(mod.testosterone??0));
-  return{cortisol:cor,melatonin:mel,testosterone:tes};
-}
+// The hormone engine that lived here (CURVES / lerp / clamp / baseVal / getHormones) was
+// removed: its only consumer was drawCurve, which was never called, so none of it reached
+// the screen. It also modelled a testosterone curve, which is not something this app has
+// any business asserting. getPhase below is unrelated and is still used by the dashboard.
 function getPhase(h,p){
   const wake=p.wake??7;
   if(h<wake-0.25)return{label:'deep sleep',advice:'Growth hormone peaks now. Every hour cut short reduces muscle repair and fat metabolism.'};
@@ -400,7 +375,6 @@ function getPhase(h,p){
 // Onboarding fills this object and persists it to localStorage (see nextStep).
 let profile=JSON.parse(localStorage.getItem('arco-profile')||'null')||{};
 let checkins=JSON.parse(localStorage.getItem('arco-checkins')||'[]');
-let todayMod={cortisol:0,melatonin:0,testosterone:0,trained:false};
 let currentStep=0;
 const DAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const DAYS_S=['S','M','T','W','T','F','S'];
@@ -2556,29 +2530,10 @@ function showProgressTab(){
     <div style="height:20px;"></div>
   `;
 }
-function drawCurve(h){
-  const canvas=document.getElementById('main-curve');if(!canvas)return;
-  const w=canvas.width,ch=canvas.height,ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,w,ch);
-  [{key:'cortisol',color:'#E8520A'},{key:'melatonin',color:'#7B8FE8'},{key:'testosterone',color:'#4BB87B'}].forEach(({key,color})=>{
-    ctx.beginPath();
-    for(let i=0;i<=240;i++){
-      const hh=(i/240)*24,v=getHormones(hh,profile,todayMod)[key],x=(hh/24)*w,y=ch-4-v*(ch-8);
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    }
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
-  });
-  const cx=(h/24)*w;
-  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,ch);
-  ctx.strokeStyle='rgba(26,22,18,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
-}
-
-function getInsight(score,p,phase){
-  if(score<50)return'Your arc is dysregulated. Prioritise sleep consistency above everything else this week.';
-  if(score<70)return'You\'re building momentum. One more consistent night makes a measurable difference.';
-  if(p.trainingTime==='evening')return'Note: evening training is elevating your cortisol at bedtime. Consider shifting one session earlier this week.';
-  return'Your arc is in a strong position. Protect your current habits. This is where compounding starts.';
-}
+// drawCurve drew the hormone curves onto a #main-curve canvas that no longer exists in the
+// markup, and nothing called it. getInsight sat here too: it graded the user off a 0-100
+// score ("your arc is dysregulated") and was likewise never called. Both are gone. Nothing
+// that scores or grades a night should sit in the file waiting to be re-wired.
 
 // NOTE: the authoritative check-in flow is the rotating-question openCheckin/submitCheckin
 // defined earlier (matches daily_logs question_key/answer). The old broken duplicate that
