@@ -132,9 +132,6 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 
 /* DASHBOARD TOP BAR */
 .topbar{display:flex;justify-content:center;align-items:center;padding:10px 20px 14px;background:var(--bg);}
-.topbar-streak{display:flex;align-items:center;gap:5px;background:var(--card);border-radius:20px;padding:6px 12px;}
-.topbar-streak-count{color:var(--ink);font-size:12px;font-weight:500;}
-.topbar-streak-label{color:var(--ink);font-size:12px;font-weight:500;}
 .topbar-grid{display:flex;gap:3px;flex-wrap:wrap;width:18px;}
 .topbar-grid span{width:7px;height:7px;background:var(--ink);border-radius:1px;display:block;opacity:0.5;}
 .topbar-today{display:flex;align-items:center;gap:4px;background:var(--card);border-radius:20px;padding:6px 12px;}
@@ -401,22 +398,6 @@ function getPhase(h,p){
   if(h<21)return{label:'melatonin rising',advice:'Core temp falling. A warm shower dilates skin vessels to release heat, accelerating the drop and reducing sleep onset time.'};
   return{label:'sleep prep',advice:'Core temp needs to drop about 1°C to trigger sleep onset. Cooler rooms, roughly 17-19°C, tend to support this and warmer ones tend to fragment sleep.'};
 }
-function arcScore(p,checkins,todayMod){
-  const sq=p.sleepQuality??3;
-  const stress=p.stress??2;
-  const streak=getStreak(checkins);
-  const trained=todayMod.trained===true?1:0;
-  const sleepScore=(sq/5)*100;
-  const stressScore=((5-stress)/4)*100;
-  const streakScore=Math.min(streak/30,1)*100;
-  const trainScore=trained*100;
-  return Math.round(sleepScore*0.30+stressScore*0.30+streakScore*0.20+trainScore*0.20);
-}
-function arcLabel(score){
-  if(score>=80)return'OPTIMAL';
-  if(score>=60)return'REGULATED';
-  return'DYSREGULATED';
-}
 
 // ── STATE ──
 // No demo seed: a fresh visitor starts with an empty profile and goes through onboarding.
@@ -436,13 +417,6 @@ function updateClocks(){
 }
 updateClocks();setInterval(updateClocks,15000);
 
-function getStreak(ci){
-  const dates=[...new Set((ci||checkins).map(c=>c.date))].sort().reverse();
-  if(!dates.length)return 1;
-  let s=0;const d=new Date();
-  for(let i=0;i<365;i++){if(dates.includes(d.toDateString())){s++;d.setDate(d.getDate()-1);}else break;}
-  return Math.max(s,1);
-}
 
 // ── STEPS ──
 const steps=[
@@ -560,7 +534,7 @@ const steps=[
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
    render:()=>`
     <div class="field-label">sessions per week</div>
-    <div class="chip-group" id="g-freq">${[1,2,3,4,5,6].map(n=>`<div class="chip${weeklySessions(profile)===n?' sel-ink':''}" data-val="${n}" onclick="selChip(this,'g-freq','ink')">${n}</div>`).join('')}</div>
+    <div class="chip-group" id="g-freq">${[1,2,3,4,5,6].map(n=>`<div class="chip${(profile.sessionsPerWeek??4)===n?' sel-ink':''}" data-val="${n}" onclick="selChip(this,'g-freq','ink')">${n}</div>`).join('')}</div>
     <div style="font-size:11px;color:var(--muted);margin-top:-12px;margin-bottom:16px;line-height:1.5;">used to space your training and rest days across the week.</div>
     <div class="field-label">typical training time</div>
     <div class="chip-group" id="g-ttime"><div class="chip${profile.trainingTime==='morning'?' sel-ink':''}" data-val="morning" onclick="selChip(this,'g-ttime','ink')">morning</div><div class="chip${profile.trainingTime==='afternoon'?' sel-ink':''}" data-val="afternoon" onclick="selChip(this,'g-ttime','ink')">afternoon</div><div class="chip${profile.trainingTime==='evening'?' sel-ink':''}" data-val="evening" onclick="selChip(this,'g-ttime','ink')">evening</div></div>
@@ -1027,71 +1001,7 @@ async function loadWeather(){
   }catch(e){/* silent: app behaves exactly as without weather */}
 }
 
-// Whether they are indoors for the entire daylight window on a workday.
-// Returns { leavesBeforeSunrise, arrivesAfterSunset, workdayDaylightMinutes }.
-function computeDaylightExposure(p){
-  const sr=p.sunriseToday, ss=p.sunsetToday;
-  if(sr==null||ss==null) return null;
-  const leave = typeof p.workStart==='number' ? p.workStart : (p.wakeTime??p.wake);
-  const home  = typeof p.workEnd==='number'   ? p.workEnd   : (p.bedTime??p.bed);
-  const leavesBeforeSunrise = typeof leave==='number' ? leave<=sr : false;
-  const arrivesAfterSunset  = typeof home==='number'  ? home>=ss  : false;
-  let free;
-  if(typeof p.workStart==='number' && typeof p.workEnd==='number'){
-    free = Math.max(0, p.workStart-sr)*60 + Math.max(0, ss-p.workEnd)*60;
-  } else { free = Math.max(0, ss-sr)*60; }
-  return { leavesBeforeSunrise, arrivesAfterSunset, workdayDaylightMinutes: Math.round(free) };
-}
 
-// Sessions per week: the exact number if we have it, otherwise derived from the old
-// coarse band so existing profiles keep working.
-function weeklySessions(p){
-  p = p || profile;
-  if(typeof p.sessionsPerWeek === 'number') return p.sessionsPerWeek;
-  return { '1-2':2, '3-4':4, '5+':5 }[p.trainingFreq] ?? 4;
-}
-// Evenly spaced training days for N sessions across 7 days, rotated by `offset`.
-// Spacing is what protects recovery, so it is fixed; only the rotation is free.
-function trainingPattern(n, offset){
-  const set = new Set();
-  for(let i=0;i<n;i++) set.add((Math.round(i*7/n) + offset) % 7);
-  return set;
-}
-// Weekly training/rest plan. Recovery spacing decides WHICH days you train; weather is
-// only a tiebreaker between rotations that are equally good for recovery.
-function planWeek(p){
-  const f=p.forecast; if(!Array.isArray(f)||f.length<2) return null;
-  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const trainCount=Math.max(0, Math.min(7, weeklySessions(p)));
-  const trainDecimal={morning:7,afternoon:14,evening:20}[p.trainingTime]??null;
-  const days=f.map((d,i)=>{
-    const dt=new Date(d.date+'T12:00');
-    return {...d, i, name:DOW[dt.getDay()],
-      outdoorOK:(d.precipProb==null?true:d.precipProb<40)&&(d.tmax==null||d.tmax>=8)};
-  });
-  // Every rotation has identical spacing, so pick the one that lands training on the
-  // driest days. Weather never changes how many sessions or how they are spaced.
-  let trainSet = new Set();
-  if(trainCount > 0 && trainCount < 7){
-    let bestWet = Infinity;
-    for(let off=0; off<7; off++){
-      const cand = trainingPattern(trainCount, off);
-      let wet = 0;
-      days.forEach(d => { if(cand.has(d.i)) wet += (d.precipProb ?? 0); });
-      if(wet < bestWet){ bestWet = wet; trainSet = cand; }
-    }
-  } else if(trainCount >= 7){ days.forEach(d => trainSet.add(d.i)); }
-  days.forEach(d=>{
-    const training = trainSet.has(d.i);
-    d.suggestion = training ? 'train' : 'rest';
-    d.indoor = training && !d.outdoorOK;      // wet training day: move it indoors, do not skip it
-    d.outside = !training && d.outdoorOK;     // clear rest day: good one to get outdoors
-  });
-  const warm=days.filter(d=>d.tmax!=null&&d.tmax>15);
-  const lastWarmDay=warm.length?warm[warm.length-1]:null;
-  const sunsetBeforeTraining=(trainDecimal!=null)?days.find(d=>d.sunset!=null&&d.sunset<trainDecimal):null;
-  return {days, lastWarmDay, sunsetBeforeTraining, trainCount, trainDecimal};
-}
 
 // ── DIAGNOSIS ENGINE ──
 function runDiagnosis(p){
@@ -1427,13 +1337,6 @@ function showDiagnosis(){
 function buildDash(){
   const now=new Date(),h=now.getHours()+now.getMinutes()/60;
   const phase=getPhase(h,profile);
-  const score=arcScore(profile,checkins,todayMod);
-  const label=arcLabel(score);
-  const streak=getStreak(checkins);
-  const weekCheckins=checkins.filter(c=>{const d=new Date(c.date),today=new Date();today.setHours(0,0,0,0);const diff=(today-d)/86400000;return diff<7;}).length;
-  const _sc=document.getElementById('streak-ct'); if(_sc) _sc.textContent=streak;
-
-  const dayNum=checkins.length+1;
   const name = (profile && profile.name && profile.name !== 'you') ? profile.name : 'Cons';
   const hr=now.getHours();
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
@@ -1568,8 +1471,7 @@ function drawClock(h){
   // that arc so it reads as a window open now and closing. Nothing renders when inactive.
   try{
     const _lw = getDayWindows(profile);
-    const dw = _lw.find(w => w.name === 'morningLight' && hL >= w.start && hL < w.end)
-            || _lw.find(w => w.name === 'dipWalk');
+    const dw = _lw.find(w => w.name === 'morningLight');
     if(dw && hL >= dw.start && hL < dw.end){
       const dwAng = hh => (hh/24)*Math.PI*2 - Math.PI/2;
       const dp = (Math.sin(Date.now()/500) + 1) / 2;
@@ -1689,83 +1591,7 @@ function drawClock(h){
   ctx.strokeStyle='rgba(232,82,10,0.95)';ctx.lineWidth=2*dpr;ctx.lineCap='round';ctx.stroke();
 }
 
-function getWindowsSimple(){
-  const wake=profile.wake??7;
-  const workStart=profile.workStart??9;
-  const workEnd=profile.workEnd??18;
-  const trainTime=profile.trainingTime??'evening';
-  const trainStart=trainTime==='morning'?wake+0.5:trainTime==='afternoon'?15:workEnd+0.5;
-  const trainEnd=Math.min(trainStart+1.5,22);
-  return[
-    {s:0,e:wake-0.25},
-    {s:wake-0.25,e:wake+0.5},
-    {s:wake+0.5,e:workStart},
-    {s:workStart,e:workEnd},
-    {s:workEnd,e:trainStart},
-    {s:trainStart,e:trainEnd},
-    {s:trainEnd,e:24},
-  ].filter(seg=>seg.s<seg.e);
-}
 
-function getWindows(p){
-  const wake=p.wake??7;
-  const workStart=p.workStart??9;
-  const workEnd=p.workEnd??18;
-  const workType=p.workType??'corporate';
-  const flex=p.flexibility??'some';
-  const trainTime=p.trainingTime??'evening';
-
-  // Derive training window from profile
-  const trainStart=trainTime==='morning'?wake+0.5:trainTime==='afternoon'?15:workEnd+0.5;
-  const trainEnd=Math.min(trainStart+1.5, 22);
-
-  // High-demand jobs compress the schedule — less discretionary time
-  const highDemand=['banking','startup','founder'].includes(workType);
-  const actualWorkEnd=highDemand&&workEnd<20?workEnd+1:workEnd;
-
-  // Build windows around the real day
-  const windows=[];
-
-  // Sleep
-  windows.push({start:0,end:wake-0.25,label:'sleep',activity:'deep sleep',desc:'Growth hormone peaks in slow-wave sleep. Every hour cut short reduces muscle repair and fat metabolism.'});
-
-  // Wake + cortisol rise
-  windows.push({start:wake-0.25,end:wake+0.5,label:'cortisol awakening',activity:'wake up',desc:'Cortisol spikes 50–100% above baseline in the first 30 minutes. Suppresses testosterone for ~45 minutes. Get sunlight now. Don\'t train yet.'});
-
-  // Pre-work focus window (if there is one)
-  if(workStart>wake+1.5){
-    windows.push({start:wake+0.5,end:workStart,label:'pre-work focus',activity:'deep work',desc:'Acetylcholine is peaking, the neurotransmitter behind focus and pattern recognition. Caffeine now extends this window. After 11:00 it delays sleep onset.'});
-  }
-
-  // Work block — split based on flexibility
-  if(flex==='full'||flex==='some'){
-    windows.push({start:workStart,end:Math.min(workStart+3,13),label:'peak focus block',activity:'deep work',desc:'Prefrontal cortex at full capacity: working memory, decision quality, and verbal reasoning all peak now.'});
-    if(workStart+3<13){
-      windows.push({start:13,end:Math.min(14,actualWorkEnd),label:'communication block',activity:'meetings & email',desc:'Cortisol declining, social cognition still strong. Verbal fluency peaks here. Optimal for calls and negotiations.'});
-    }
-    const dipStart=Math.max(13,workStart+3);
-    const dipEnd=Math.min(dipStart+1.5,actualWorkEnd);
-    if(dipEnd>dipStart&&actualWorkEnd>14){
-      windows.push({start:dipStart,end:dipEnd,label:'afternoon dip',activity:'low-stakes tasks',desc:'Core temperature drops ~0.5°C, the same trigger as sleep onset. A 20-minute rest enters Stage 2 sleep and restores alertness. Longer hits slow-wave and impairs waking.'});
-    }
-    if(actualWorkEnd>dipEnd+0.5){
-      windows.push({start:dipEnd,end:actualWorkEnd,label:'late work block',activity:'collaborative work',desc:'A second cortisol curve emerges mid-afternoon. Reaction time and verbal processing return.'});
-    }
-  } else {
-    windows.push({start:workStart,end:Math.min(actualWorkEnd,24),label:'work',activity:'work',desc:`Cortisol peaks in the first 2 hours of work. After 13:00 a biological dip reduces cognitive output. Use it for admin.`});
-  }
-
-  // Training
-  if(trainStart>=actualWorkEnd||trainTime==='morning'){
-    windows.push({start:trainStart,end:trainEnd,label:'training',activity:'Physical training',desc:'Muscle temperature runs about 1°C above baseline, tendon elasticity peaks and pain tolerance is elevated (exercise-induced hypoalgesia). This is when hard sets feel most achievable and stiffness-related injury risk is lowest.'});
-  }
-
-  // Sleep prep
-  const sleepPrepStart=Math.max(actualWorkEnd,trainEnd,21);
-  windows.push({start:sleepPrepStart,end:24,label:'sleep prep',activity:'prepare for sleep',desc:'Core temperature needs to drop 1°C to trigger sleep onset. A warm shower dilates skin vessels to release heat, accelerating the drop. Blue light delays melatonin by up to 3 hours.'});
-
-  return windows;
-}
 
 // ── DAY STRUCTURE ────────────────────────────────────────────────────────────
 // Meal/recovery windows anchor to wake & training; cognitive windows anchor to
@@ -1775,52 +1601,19 @@ function getWindows(p){
 function getDayWindows(p){
   const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
   if(wake == null || bed == null) return [];
-  const tmap = { morning:7, afternoon:14, evening:20 };
-  let train = (typeof p.trainingTime === 'number') ? p.trainingTime
-            : (p.trainingTime && tmap[p.trainingTime] != null ? tmap[p.trainingTime] : null);
-  if(p.trainingFreq === 'rest' || p.restDay === true) train = null;   // explicit rest day
-
-  // Chronotype offset — cognitive phases only, and only the wake-anchored ones.
-  let off = 0;
-  const ct = (typeof computeChronotype === 'function') ? computeChronotype(p) : null;
-  if(ct && ct.MSFsc != null) off = Math.max(-1.5, Math.min(1.5, ct.MSFsc - 4.0));
-
   // Linear day: a bedtime at or after midnight is the NEXT day, so express it as >24
-  // (00:00 becomes 24). Windows are returned in these linear coordinates; fmt() wraps
-  // them for display and dayH() maps the current time onto the same line.
+  // (00:00 becomes 24). fmt() wraps for display, dayH() maps the current time on.
   const bedL = bedLinear(p);
-  if(train != null && train < wake) train += 24;   // training after midnight
-
   const wins = [];
-  const add = (name, category, start, end, level) => {
-    if(start >= bedL) return;           // window landing after bedtime → suppress
-    wins.push({ name, category, level: level || null, start, end: Math.min(end, bedL) });
+  const add = (name, start, end) => {
+    if(start >= bedL) return;
+    wins.push({ name, start, end: Math.min(end, bedL) });
   };
-
-  // Cognitive (wake-anchored, offset by chronotype). windDown is bed-anchored, so
-  // it is NOT offset — offsetting it would push it past bedtime and suppress it.
-  add('sleepInertia', 'cognitive', wake + off,       wake + 0.75 + off, 'STRONG');
-  add('trough',       'cognitive', wake + 6 + off,   wake + 8 + off,    'MODERATE');
-  add('physicalPeak', 'cognitive', wake + 10 + off,  wake + 11.5 + off, 'MODERATE');
-  add('windDown',     'cognitive', bedL - 1.5,       bedL,              'MODERATE');
-
-  // Meals & recovery (anchored to wake / training, never offset).
-  // Morning light is the single biggest circadian lever, so it gets its own window.
-  add('morningLight', 'recovery', wake + 0.25, wake + 1.25, null);
-  add('breakfast', 'meal',     wake + 0.5, wake + 1.5,  null);
-  add('lunch',     'meal',     wake + 4,   wake + 5,    null);
-  add('dipWalk',   'recovery', wake + 5.5, wake + 5.75, null);
-  if(train != null){
-    if(train < wake + 7){
-      // Early training: main meal would collide with lunch. One meal after training, no post-training.
-      add('mainMeal', 'meal', train + 1.25, train + 2.25, null);
-    } else {
-      add('mainMeal',     'meal', train - 2.5,  train - 1.5,  null);
-      add('postTraining', 'meal', train + 1.25, train + 1.75, null);
-    }
-  } else {
-    add('mainMeal', 'meal', wake + 9, wake + 10, null);   // rest day / no training
-  }
+  // Only the two windows that are about sleep. Meal timing and the cognitive
+  // productivity windows were removed: they were not sleep-relevant enough to earn
+  // the space, and the state card now carries what to do right now.
+  add('morningLight', wake + 0.25, wake + 1.25);   // the biggest circadian lever
+  add('windDown',     bedL - 0.5,  bedL);          // the last half hour before bed
   return wins;
 }
 // A bedtime at or before wake belongs to the next day: express it on a linear
@@ -1874,53 +1667,15 @@ const rgbTone = t => `rgb(${DAY_TONE[t][0]},${DAY_TONE[t][1]},${DAY_TONE[t][2]})
 // Which tone covers a given linear-day hour. bn = getDayWindows keyed by name.
 function phaseToneAt(hl, bn){
   const on = w => w && hl >= w.start && hl < w.end;
-  if(on(bn.sleepInertia) || on(bn.trough) || on(bn.windDown)) return 'dull';
-  return 'sharp';
+  return on(bn.windDown) ? 'dull' : 'sharp';   // awake is gold, the wind-down dims into night
 }
 
 function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
 
-function getCurrentWindow(h,p){
-  const windows=getWindows(p);
-  return windows.find(w=>h>=w.start&&h<w.end)||windows[windows.length-1];
-}
 
-function windowTimeStr(h,p){
-  const w=getCurrentWindow(h,p);
-  return fmt(w.start)+'–'+fmt(w.end);
-}
 
-function windowProgress(h,p){
-  const w=getCurrentWindow(h,p);
-  const pct=((h-w.start)/(w.end-w.start))*100;
-  return Math.min(Math.max(pct,2),98);
-}
 
-function windowRemaining(h,p){
-  const w=getCurrentWindow(h,p);
-  const mins=Math.round((w.end-h)*60);
-  if(mins>=60){const hrs=Math.floor(mins/60),m=mins%60;return hrs+'h'+(m>0?' '+m+'m':'');}
-  return mins+'m';
-}
 
-function buildSchedule(h,p){
-  const windows=getWindows(p);
-  return windows.map(w=>{
-    const isActive=h>=w.start&&h<w.end;
-    const isPast=h>=w.end;
-    const activeStyle=isActive?'border-left:2px solid var(--orange);padding-left:10px;margin-left:-10px;':'';
-    const windowColor=isActive?'var(--orange)':isPast?'rgba(26,22,18,0.22)':'rgba(26,22,18,0.4)';
-    const activityColor=isActive?'var(--ink)':isPast?'rgba(26,22,18,0.28)':'var(--ink)';
-    const descOpacity=isPast?'0.3':isActive?'0.65':'0.55';
-    const nowPill=isActive?`<div style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;"><div style="width:5px;height:5px;border-radius:50%;background:var(--orange);"></div><span style="font-size:10px;color:var(--orange);font-weight:500;letter-spacing:0.04em;">now</span></div>`:'';
-    return`<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--sep);${activeStyle}">
-      <div style="font-size:10px;font-weight:500;letter-spacing:0.05em;color:${windowColor};margin-bottom:3px;">${fmt(w.start)}–${fmt(w.end)}</div>
-      <div style="font-size:13px;font-weight:500;color:${activityColor};margin-bottom:3px;">${w.activity}</div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;opacity:${descOpacity};">${w.desc}</div>
-      ${nowPill}
-    </div>`;
-  }).join('').replace(/border-bottom[^;]+;(?=\s*$)/,'');
-}
 
 // ── ROTATING DAILY QUESTIONS ──
 // Daily check-in questions acquire the remaining engine fields. Each maps to a profile
@@ -2002,39 +1757,6 @@ function adoptedDays(id){
 const SHORT_NAME = { vitd:'vitamin D3', magnesium:'magnesium', omega3:'omega-3', zinc:'zinc', b12:'B12',
   k2:'vitamin K2', coq10:'CoQ10', ashwagandha:'ashwagandha', magnesium_threonate:'magnesium L-threonate',
   creatine:'creatine', iron:'iron' };
-const WINDOW_NAME = { sleepInertia:'Sleep inertia', trough:'Trough',
-  physicalPeak:'Physical peak', windDown:'Wind-down', neutral:'Steady',
-  morningLight:'Morning light', dipWalk:'Before the dip', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
-  postTraining:'Post-training meal', sleep:'Asleep' };
-const WINDOW_LINE = {
-  sleepInertia:'Grogginess in the first 30 to 60 minutes after waking. Do not judge the day by how you feel now, it lifts on its own.',
-  trough:'A post-lunch dip affects many but not all people, about five in twelve in one controlled study. It happens even without lunch, so it is circadian rather than a food coma, and it tends to be worse after a high-carbohydrate meal. If it hits you, put admin, email and mechanical work here rather than fighting through it. A lighter, lower-carbohydrate lunch reduces it.',
-  physicalPeak:'Strength and power tend to track core body temperature, which tends to peak late afternoon to early evening. The difference across the day runs roughly 3-21% depending on the muscle group, is smaller in trained people, and shifts towards whenever you habitually train.',
-  windDown:'The last stretch before bed. Ease off cognitively so sleep pressure can take over.',
-  neutral:'No strong peak or dip, a steady stretch. Fine for routine work, meetings and admin.',
-  dipWalk:'Ten minutes outside now blunts the afternoon dip. Light is alerting through a different pathway than food, and it does not borrow from tonight.',
-  breakfast:'Breakfast. Protein-forward, around 30g if you can, steadies the morning.',
-  lunch:'Lunch. Keep it substantial enough to carry the afternoon.',
-  mainMeal:'Your main meal, timed so it is digested before you train.',
-  postTraining:'Refuel after training. Protein-forward rather than a full second dinner.',
-  sleep:'Asleep, or heading there. Nothing to act on right now.'
-};
-// One-line versions for the current-phase card under the strip. The popup keeps the
-// full copy; this is the glanceable version.
-const WINDOW_SHORT = {
-  morningLight:'Get outside if you can. It anchors the whole day.',
-  sleepInertia:'Grogginess lifts on its own. Do not judge the day on it.',
-  trough:'A circadian dip for many people. Admin, not hard thinking.',
-  physicalPeak:'Strength tends to peak around now.',
-  windDown:'Ease off so sleep pressure can take over.',
-  neutral:'No strong peak or dip. Good for routine work.',
-  dipWalk:'Ten minutes outside now blunts the dip.',
-  breakfast:'Protein-forward if you can manage it.',
-  lunch:'Lighter and lower-carbohydrate reduces the afternoon dip.',
-  mainMeal:'Timed to be digested before you train.',
-  postTraining:'Refuel. Protein-forward rather than a second dinner.',
-  sleep:'Asleep, or heading there. Nothing to act on.'
-};
 // ── WAKE-TIME REGULARITY ─────────────────────────────────────────────────────
 // Seven bars showing wake time across the week, with the variance visible as shape.
 // Explicitly NOT a score: no number is graded, nothing can be failed. Built from the
@@ -2130,51 +1852,6 @@ function sleepStateCard(){
   </div>`;
 }
 
-// Current-phase note: name, range and a one-liner. Lives in the clock card, filling the
-// space the supplement dots used to occupy.
-function currentPhaseNote(){
-  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
-  let ph; try{ ph = getCurrentPhase(h, profile); }catch(e){ return ''; }
-  if(!ph) return '';
-  const isSup = ph.key === 'supplement';
-  const nm = isSup ? (SHORT_NAME[ph.sup.key]||ph.sup.name) : (WINDOW_NAME[ph.key]||ph.key);
-  const note = isSup ? `Take ${ph.sup.dose} now.` : (WINDOW_SHORT[ph.key] || '');
-  const range = ph.key === 'sleep' ? '' : `${fmt(ph.start)}–${fmt(ph.end)}`;
-  return `<div onclick="openWindowPopup('${isSup?'neutral':ph.key}',${+ph.start.toFixed(3)},${+ph.end.toFixed(3)})" style="background:rgba(26,22,18,0.05);border-radius:14px;padding:13px 15px;margin-top:4px;cursor:pointer;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;">
-      <span style="font-size:10px;font-weight:600;color:var(--orange);letter-spacing:0.07em;text-transform:uppercase;">now · ${nm}</span>
-      ${range?`<span style="font-size:10px;color:var(--muted);flex-shrink:0;">${range}</span>`:''}
-    </div>
-    <div style="font-size:13px;color:rgba(26,22,18,0.72);line-height:1.55;">${note}</div>
-  </div>`;
-}
-window.openWindowPopup = function(name, start, end){
-  const line = name === 'dipWalk' ? dipWalkLine(profile)
-    : name === 'morningLight' ? morningLightLine(profile) : WINDOW_LINE[name]; if(!line) return;
-  const NAMED = ['sleepInertia','trough','physicalPeak','windDown'];
-  let next = null;
-  try{ next = getDayWindows(profile).filter(w=>NAMED.includes(w.name)).sort((a,b)=>a.start-b.start)
-    .find(w => w.start >= end - 0.001 && w.name !== name); }catch(e){}
-  document.getElementById('ci-question-title').textContent = `${WINDOW_NAME[name].toUpperCase()} · ${fmt(start)}–${fmt(end)}`;
-  document.getElementById('ci-question-sub').textContent = '';
-  const nextHtml = next ? `<div style="font-size:12px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:0.5px solid var(--sep);">Next: ${WINDOW_NAME[next.name].toLowerCase()}, ${fmt(next.start)}</div>` : '';
-  document.getElementById('ci-question-body').innerHTML = `<div style="font-size:13px;color:var(--muted);line-height:1.6;">${line}</div>${nextHtml}`;
-  const btn = document.getElementById('ci-action-btn'); btn.textContent = 'got it'; btn.setAttribute('onclick','closeCheckin()');
-  document.getElementById('modal-overlay').classList.add('open');
-  document.getElementById('checkin-modal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-};
-// Dip-walk copy is dynamic: it names the user's own trough times, and when today's
-// forecast UV is high enough for cutaneous synthesis it says so.
-function dipWalkLine(p){
-  let troughTxt = 'the afternoon dip';
-  try{ const t = getDayWindows(p).find(w => w.name === 'trough');
-    if(t) troughTxt = 'roughly ' + fmt(t.start) + ' to ' + fmt(t.end); }catch(e){}
-  let s = `Your circadian low is ${troughTxt}. Ten minutes outside now blunts it. `
-        + 'Light is alerting through a different pathway than food, and it does not borrow from tonight.';
-  if(typeof p.uvToday === 'number' && p.uvToday >= 3) s += ` UV is ${Math.round(p.uvToday)} today, so this covers your vitamin D as well.`;
-  return s;
-}
 // Morning-light copy is dynamic: if the sun is not up yet where they are, telling them
 // to go outside would be wrong, so it points at a lamp instead.
 function morningLightLine(p){
@@ -2192,134 +1869,6 @@ function morningLightLine(p){
     s = `Daylight starts at ${fmt(sr)}. Get ten minutes outside as soon as it does. ` + s.split('. ').slice(1).join('. ');
   }
   return s;
-}
-// The single "now" phase, by priority: dipWalk > supplement due > physicalPeak (only
-// when training is within 2h) > meal > cognitive > physicalPeak, falling back to a
-// steady gap, or sleep outside the waking day. There is never a moment nothing is true.
-function getCurrentPhase(h, p){
-  const wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
-  if(wake == null || bed == null) return null;
-  const bedL = bedLinear(p), hL = dayH(h, p);   // linear line: handles post-midnight bedtimes
-  let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
-  const bn = {}; wins.forEach(w => bn[w.name] = w);
-  const on = w => w && hL >= w.start && hL < w.end;
-  if(on(bn.morningLight)) return { key:'morningLight', start:bn.morningLight.start, end:bn.morningLight.end };
-  if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
-  const due = activeSupplements(p).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && hL >= s.window[0] && hL < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
-  if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
-  // physicalPeak outranks meals/cognitive only when a session is imminent (within 2h).
-  const tmapP = { morning:7, afternoon:14, evening:20 };
-  let trainH = (typeof p.trainingTime === 'number') ? p.trainingTime
-    : (p.trainingTime && tmapP[p.trainingTime] != null ? tmapP[p.trainingTime] : null);
-  if(trainH != null && trainH < wake) trainH += 24;
-  const trainSoon = trainH != null && (trainH - hL) >= 0 && (trainH - hL) <= 2;
-  if(trainSoon && on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
-  const meal = ['breakfast','lunch','mainMeal','postTraining'].map(n=>bn[n]).filter(Boolean).find(on);
-  if(meal) return { key:meal.name, start:meal.start, end:meal.end };
-  const cog = ['sleepInertia','trough','windDown'].map(n=>bn[n]).filter(Boolean).find(on);
-  if(cog) return { key:cog.name, start:cog.start, end:cog.end };
-  if(on(bn.physicalPeak)) return { key:'physicalPeak', start:bn.physicalPeak.start, end:bn.physicalPeak.end };
-  if(hL >= wake && hL < bedL){
-    const cw = ['sleepInertia','trough','windDown'].map(n=>bn[n]).filter(Boolean).sort((a,b)=>a.start-b.start);
-    let start = wake, end = bedL;
-    cw.forEach(w => { if(w.end <= hL && w.end > start) start = w.end; });
-    const nx = cw.find(w => w.start > hL); if(nx) end = nx.start;
-    return { key:'neutral', start, end };
-  }
-  return { key:'sleep', start:bed, end:wake };
-}
-// Friday only: the lie-in trade, decided on Friday evening rather than Sunday.
-// Requires a real weekendWakeTime — if we do not have one we render nothing rather
-// than guessing a number.
-function fridayCard(){
-  const p = profile;
-  if(new Date().getDay() !== 5) return '';
-  const wake = p.wakeTime ?? p.wake, wkWake = p.weekendWakeTime;
-  if(wake == null || wkWake == null) return '';
-  const gap = wkWake - wake;
-  if(!(gap >= 1.5)) return '';
-  const capped = wake + 1;                       // cap the lie-in at an hour
-  const costMin = Math.round((wkWake - capped) * 60);
-  const WORDS = { 30:'thirty minutes', 45:'forty-five minutes', 60:'an hour', 75:'seventy-five minutes',
-                  90:'ninety minutes', 105:'an hour and three quarters', 120:'two hours' };
-  const cost = WORDS[costMin] || (costMin + ' minutes');
-  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">tomorrow's lie-in</div>
-    <div style="font-size:14px;color:var(--ink);line-height:1.6;">Waking at ${fmt(capped)} tomorrow instead of ${fmt(wkWake)} costs you ${cost} and saves you Monday. Take the extra sleep at the front of the night instead.</div>
-  </div>`;
-}
-function dayStripCard(){
-  const p = profile, wake = p.wakeTime ?? p.wake;
-  if(wake == null || (p.bedTime ?? p.bed) == null) return '';
-  const bed = bedLinear(p);                       // post-midnight bedtime becomes >24
-  const span = bed - wake; if(span <= 0) return '';
-  let wins; try{ wins = getDayWindows(p); }catch(e){ return ''; }
-  const byName = {}; wins.forEach(w => byName[w.name] = w);
-  // Exactly the clock's palette and divisions (DAY_TONE / phaseToneAt), opaque so the
-  // bar and the ring read as the same colours.
-  const TONE = { sharp:rgbTone('sharp'), neutral:rgbTone('neutral'), dull:rgbTone('dull') };
-  const toneOf = { sleepInertia:'dull', trough:'dull', windDown:'dull' };
-  const pct = t => ((t - wake) / span) * 100;
-  const strip = ['sleepInertia','trough','windDown']
-    .map(n => byName[n]).filter(Boolean).sort((a,b) => a.start - b.start);
-  let cursor = wake; const segs = [];
-  strip.forEach(w => {
-    const s = Math.max(w.start, wake), e = Math.min(w.end, bed);
-    if(e <= s) return;
-    if(s > cursor + 0.001) segs.push({ start:cursor, end:s, tone:'neutral', name:'neutral' });
-    segs.push({ start:s, end:e, tone:toneOf[w.name], name:w.name });
-    cursor = e;
-  });
-  if(cursor < bed - 0.001) segs.push({ start:cursor, end:bed, tone:'neutral', name:'neutral' });
-  const segHtml = segs.map(sg => {
-    const left = pct(sg.start), width = pct(sg.end) - pct(sg.start);
-    // every segment (gaps included) is tappable
-    return `<div onclick="openWindowPopup('${sg.name}',${+sg.start.toFixed(3)},${+sg.end.toFixed(3)})" style="position:absolute;top:0;bottom:0;left:${left}%;width:${width}%;background:${TONE[sg.tone]};cursor:pointer;"></div>`;
-  }).join('');
-  // physicalPeak — its own line below the strip, deep ink: a different measurement.
-  let peakHtml = '';
-  const pk = byName['physicalPeak'];
-  if(pk){ const s = Math.max(pk.start, wake), e = Math.min(pk.end, bed);
-    if(e > s) peakHtml = `<div onclick="openWindowPopup('physicalPeak',${+s.toFixed(3)},${+e.toFixed(3)})" style="position:absolute;top:0;bottom:0;left:${pct(s)}%;width:${pct(e)-pct(s)}%;background:rgba(26,22,18,0.72);border-radius:2px;cursor:pointer;"></div>`;
-  }
-  // Meals — small ink notches on the same timeline, a distinct category from the phase
-  // blocks. Small tap zone so they don't swallow the underlying phase segment.
-  const mealMarks = ['breakfast','lunch','mainMeal','postTraining'].map(n => byName[n]).filter(Boolean).map(m => {
-    const s = Math.max(m.start, wake), e = Math.min(m.end, bed); if(e <= s) return '';
-    return `<div onclick="event.stopPropagation();openWindowPopup('${m.name}',${+s.toFixed(3)},${+e.toFixed(3)})" style="position:absolute;top:0;height:18px;left:${pct((s+e)/2)}%;transform:translateX(-50%);width:24px;z-index:2;cursor:pointer;display:flex;justify-content:center;">
-      <div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid rgba(26,22,18,0.82);"></div></div>`;
-  }).join('');
-  const now = new Date(), h = dayH(now.getHours() + now.getMinutes()/60, p);
-  const inDay = h >= wake && h < bed;
-  const nowHtml = inDay
-    ? `<div style="position:absolute;top:16px;bottom:0;left:${pct(h)}%;width:1.5px;background:rgba(232,82,10,0.95);z-index:3;pointer-events:none;"></div>` : '';
-  // The one label: the current phase, at the now-line. Everything else stays unlabelled.
-  // The same phase also gets a short note under the bar, so the encoding pays out in words.
-  let labelHtml = '';
-  const phNow = getCurrentPhase(h, p);
-  if(inDay && phNow){
-    const nm = phNow.key === 'supplement' ? (SHORT_NAME[phNow.sup.key]||phNow.sup.name) : (WINDOW_NAME[phNow.key]||phNow.key);
-    const lx = Math.max(9, Math.min(91, pct(h)));
-    labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
-  }
-  // Card wrapper: title above, then label row / strip / physicalPeak line, with a short
-  // legend so the encoding does not have to be guessed. now-line spans strip+peak.
-  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">your day</div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">waking to bed, and how sharp you are across it.</div>
-    <div style="position:relative;padding-top:16px;">
-      ${labelHtml}
-      <div style="position:relative;height:30px;border-radius:6px;overflow:hidden;">${segHtml}${mealMarks}</div>
-      <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
-      ${nowHtml}
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:10px;color:var(--muted);">
-      <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.sharp};"></span>steady</span>
-      <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.dull};"></span>low points</span>
-      <span style="display:flex;align-items:center;gap:5px;"><span style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid rgba(26,22,18,0.82);"></span>meals</span>
-      <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:3px;border-radius:2px;background:rgba(26,22,18,0.72);"></span>training window</span>
-    </div>
-  </div>`;
 }
 
 function dailyContradictionCard(){
@@ -2346,42 +1895,6 @@ function dailyContradictionCard(){
   return `<div style="background:var(--card);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;">${contradictionInner(pick)}${action}</div>`;
 }
 
-// Seven-day outdoor/training plan from the live forecast. Days 1-3 stated plainly,
-// 4-7 hedged and visually receded. Silent when there is no forecast.
-function _wxGlyph(d){
-  const p = d.precipProb;
-  if(p!=null && p>=50) return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 15a4 4 0 0 1 .6-7.95A5 5 0 0 1 16.5 8 3.5 3.5 0 0 1 17 15" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 17l-1 2.5M13 17l-1 2.5M17 17l-1 2.5" stroke="var(--orange)" stroke-width="1.4" stroke-linecap="round"/></svg>`;
-  if(p!=null && p>=25) return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 16a4 4 0 0 1 .6-7.95A5 5 0 0 1 16.5 9 3.5 3.5 0 0 1 17 16H6z" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3.8" stroke="var(--orange)" stroke-width="1.4"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M6 18l1.4-1.4" stroke="var(--orange)" stroke-width="1.2" stroke-linecap="round"/></svg>`;
-}
-function weekPlanCard(){
-  let plan; try{ plan = planWeek(profile); }catch(e){ return ''; }
-  if(!plan || !plan.days || plan.days.length < 2) return '';
-  const cols = plan.days.map((d,i)=>{
-    const hedged = i >= 3;                                   // days 4-7 recede
-    const isToday = i === 0;                                 // forecast[0] is today
-    // train / indoor (wet training day) / outside (clear rest day) / rest
-    const sug = d.suggestion==='train' ? (d.indoor ? 'indoor' : 'train') : (d.outside ? 'outside' : 'rest');
-    const sugColor = sug==='train' ? 'var(--ink)' : sug==='indoor' ? 'rgba(26,22,18,0.55)'
-      : sug==='outside' ? 'var(--orange)' : 'var(--muted)';
-    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;${hedged?'opacity:0.5;':''}${isToday?'background:rgba(26,22,18,0.06);border-radius:8px;padding:6px 0 5px;margin:-6px 0 -5px;':''}">
-      <div style="font-size:9.5px;letter-spacing:0.05em;color:${isToday?'var(--ink)':'var(--muted)'};text-transform:uppercase;font-weight:${isToday?'700':'400'};">${d.name}</div>
-      <div style="height:15px;line-height:0;">${_wxGlyph(d)}</div>
-      <div style="font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;">${d.tmax!=null?Math.round(d.tmax)+'°':'&nbsp;'}</div>
-      <div style="font-size:9.5px;font-weight:600;color:${sugColor};letter-spacing:0.01em;">${sug}</div>
-    </div>`;
-  }).join('');
-  const flags = [];
-  if(plan.lastWarmDay){ const d=plan.lastWarmDay; flags.push(`Last day above 15°C ${d.i>=3?'looks to be':'is'} ${d.name}.`); }
-  if(plan.sunsetBeforeTraining){ const d=plan.sunsetBeforeTraining; flags.push(`Sunset ${d.i>=3?'looks to fall':'falls'} before your usual training time from ${d.name}.`); }
-  const flagHtml = flags.length ? `<div style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--sep);">${flags.join('<br>')}</div>` : '';
-  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 14px 14px;margin-bottom:12px;">
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px;">this week</div>
-    <div style="display:flex;gap:3px;">${cols}</div>
-    ${flagHtml}
-    <div style="font-size:10px;color:var(--muted);opacity:0.75;margin-top:10px;">forecasts beyond 4 days are less reliable</div>
-  </div>`;
-}
 
 window.openCheckin = function(){
   currentQuestion = getNextQuestion();
@@ -3405,62 +2918,6 @@ function markTaken(key){
   buildDash();
 }
 
-function buildSupplementCard(h, p) {
-  const sups = p.supplements || [];
-  if (!sups.length) return '';
-
-  const all = sups.map(key => supView(key)).filter(s => s && s.name && !s.anytime);
-  const due = all.filter(s => h >= s.window[0] && h < s.window[1]);
-  const laterToday = all.filter(s => s.window[0] > h).sort((a,b) => a.window[0] - b.window[0]);
-
-  // Build cards for all due supplements
-  let html = '';
-
-  if (due.length) {
-    due.forEach(s => {
-      const taken = takenToday.includes(s.key);
-      if(taken){
-        // Checked state — green, fading
-        html += `<div onclick="markTaken('${s.key}')" style="background:#1a3a1a;border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:all 0.3s;display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <div style="font-size:10px;color:#4BB87B;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;font-weight:500;">taken</div>
-            <div style="font-size:15px;font-weight:500;color:rgba(75,184,123,0.7);text-decoration:line-through;">${s.name}</div>
-            <div style="font-size:11px;color:rgba(75,184,123,0.4);margin-top:2px;">${s.dose}</div>
-          </div>
-          <div style="width:28px;height:28px;border-radius:50%;background:#4BB87B;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-        </div>`;
-      } else {
-        html += `<div onclick="markTaken('${s.key}')" style="background:var(--ink);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;cursor:pointer;active:opacity:0.85;transition:opacity 0.15s;">
-          <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;font-weight:500;">take now</div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-            <div style="font-size:15px;font-weight:500;color:#EDE9E1;">${s.name}</div>
-            <div style="font-size:12px;color:rgba(237,233,225,0.4);">${s.dose}</div>
-          </div>
-          <div style="font-size:12px;color:rgba(237,233,225,0.5);line-height:1.55;">${s.reason}</div>
-          <div style="margin-top:10px;height:1.5px;background:rgba(237,233,225,0.08);border-radius:1px;">
-            <div style="height:100%;width:30px;background:rgba(237,233,225,0.2);border-radius:1px;"></div>
-          </div>
-          <div style="font-size:10px;color:rgba(237,233,225,0.25);margin-top:6px;">tap to mark taken</div>
-        </div>`;
-      }
-    });
-  }
-
-  if (!due.length && laterToday.length) {
-    const s = laterToday[0];
-    html += `<div style="background:var(--card);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">supplement · ${fmt(s.window[0])}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:14px;font-weight:500;color:var(--ink);">${s.name}</div>
-        <div style="font-size:12px;color:var(--muted);">${s.dose}</div>
-      </div>
-    </div>`;
-  }
-
-  return html;
-}
 
 function buildProtocolCard(h, p){
   const sups = activeSupplements(p);
@@ -3542,19 +2999,6 @@ window.toggleSupDetail = function(id){
   el.style.display = el.style.display==='none' ? 'block' : 'none';
 };
 
-function buildNextWindow(h,p){
-  const windows=getWindows(p);
-  const nextIdx=windows.findIndex(w=>w.start>h);
-  if(nextIdx===-1) return '';
-  const next=windows[nextIdx];
-  return`<div style="background:var(--card);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:3px;">up next · ${fmt(next.start)}</div>
-      <div style="font-size:14px;font-weight:500;color:var(--ink);">${next.activity}</div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);">${fmt(next.start)}–${fmt(next.end)}</div>
-  </div>`;
-}
 
 function showProtocolTab(){
   const diagnosis = runDiagnosis(profile);
@@ -3626,41 +3070,10 @@ function showProtocolTab(){
     </div>
     ${cards}
     ${stackExtrasHTML(diagnosis)}
-    ${dayStructureSection()}
     <div style="height:20px;"></div>
   `;
 }
 
-// Protocol tab reference list: every window with times, grouped meals / recovery /
-// cognitive. Reference material, not a daily check.
-function dayStructureSection(){
-  let wins; try{ wins = getDayWindows(profile); }catch(e){ return ''; }
-  if(!wins || !wins.length) return '';
-  const GROUPS = [
-    ['meals', ['breakfast','lunch','mainMeal','postTraining']],
-    ['recovery', ['dipWalk','windDown']],
-    ['cognitive', ['sleepInertia','trough','physicalPeak','windDown']]
-  ];
-  const bn = {}; wins.forEach(w => bn[w.name] = w);
-  const blocks = GROUPS.map(([label, names]) => {
-    const rows = names.map(n => bn[n]).filter(Boolean).sort((a,b)=>a.start-b.start).map(w => `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:0.5px solid var(--sep);">
-        <span style="font-size:13px;color:var(--ink);">${WINDOW_NAME[w.name] || w.name}</span>
-        <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0;">${fmt(w.start)}–${fmt(w.end)}</span>
-      </div>`).join('');
-    if(!rows) return '';
-    return `<div style="margin-bottom:14px;">
-      <div style="font-size:9.5px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">${label}</div>
-      ${rows}
-    </div>`;
-  }).join('');
-  if(!blocks) return '';
-  return `<div style="padding:16px 0 6px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:2px;">day structure</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.5;">Derived from your wake, bed and training times.</div>
-    </div>
-    <div style="background:var(--card);border-radius:var(--radius);padding:14px 18px 2px;margin-bottom:16px;">${blocks}</div>`;
-}
 
 function showProgressTab(){
   // No score, no streak, no grade, and no simulated data. Two honest things: how the
@@ -3695,7 +3108,7 @@ function showProgressTab(){
   const adopted = Object.keys(profile.adopted || {});
   const leverRows = adopted.length ? adopted.map(id=>{
     const r = RULES.find(x=>x.id===id), d = adoptedDays(id);
-    const name = r ? (WINDOW_NAME[id] || id.replace(/-/g,' ')) : id.replace(/-/g,' ');
+    const name = id.replace(/-/g, ' ');
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:0.5px solid var(--sep);">
       <div style="min-width:0;">
         <div style="font-size:13px;color:var(--ink);">${name}</div>
