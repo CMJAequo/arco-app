@@ -534,13 +534,21 @@ const steps=[
   },
   {title:'how do you train?',sub:'exercise timing is one of the biggest levers on your arc.',
    render:()=>`
-    <div class="field-label">training frequency</div>
-    <div class="chip-group" id="g-freq"><div class="chip${profile.trainingFreq==='1-2'?' sel-ink':''}" data-val="1-2" onclick="selChip(this,'g-freq','ink')">1–2x / week</div><div class="chip${profile.trainingFreq==='3-4'?' sel-ink':''}" data-val="3-4" onclick="selChip(this,'g-freq','ink')">3–4x / week</div><div class="chip${profile.trainingFreq==='5+'?' sel-ink':''}" data-val="5+" onclick="selChip(this,'g-freq','ink')">5+ / week</div></div>
+    <div class="field-label">sessions per week</div>
+    <div class="chip-group" id="g-freq">${[1,2,3,4,5,6].map(n=>`<div class="chip${weeklySessions(profile)===n?' sel-ink':''}" data-val="${n}" onclick="selChip(this,'g-freq','ink')">${n}</div>`).join('')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-12px;margin-bottom:16px;line-height:1.5;">used to space your training and rest days across the week.</div>
     <div class="field-label">typical training time</div>
     <div class="chip-group" id="g-ttime"><div class="chip${profile.trainingTime==='morning'?' sel-ink':''}" data-val="morning" onclick="selChip(this,'g-ttime','ink')">morning</div><div class="chip${profile.trainingTime==='afternoon'?' sel-ink':''}" data-val="afternoon" onclick="selChip(this,'g-ttime','ink')">afternoon</div><div class="chip${profile.trainingTime==='evening'?' sel-ink':''}" data-val="evening" onclick="selChip(this,'g-ttime','ink')">evening</div></div>
     <div class="field-label">typical stress level</div>
     <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.stress??3}" step="1" id="f-stress" oninput="document.getElementById('f-stressv').textContent=this.value"><span class="slider-val" id="f-stressv">${profile.stress??3}</span></div><div class="slider-labels"><span>low</span><span>high</span></div></div>`,
-   save:()=>{profile.trainingFreq=getChip('g-freq')||'3-4';profile.trainingTime=getChip('g-ttime')||'afternoon';profile.stress=parseInt(document.getElementById('f-stress').value)||3;}
+   save:()=>{
+     const n=parseInt(getChip('g-freq'))||4;
+     profile.sessionsPerWeek=n;
+     // Keep the coarse band in sync: runDiagnosis and the contradiction engine read it.
+     profile.trainingFreq = n<=2 ? '1-2' : n<=4 ? '3-4' : '5+';
+     profile.trainingTime=getChip('g-ttime')||'afternoon';
+     profile.stress=parseInt(document.getElementById('f-stress').value)||3;
+   }
   },
   {title:'how does your work day look?',sub:'your schedule shapes when focus, rest and training are actually possible.',
    render:()=>`
@@ -970,22 +978,50 @@ function computeDaylightExposure(p){
   return { leavesBeforeSunrise, arrivesAfterSunset, workdayDaylightMinutes: Math.round(free) };
 }
 
-// Weekly outdoor/training plan from the 7-day forecast.
+// Sessions per week: the exact number if we have it, otherwise derived from the old
+// coarse band so existing profiles keep working.
+function weeklySessions(p){
+  p = p || profile;
+  if(typeof p.sessionsPerWeek === 'number') return p.sessionsPerWeek;
+  return { '1-2':2, '3-4':4, '5+':5 }[p.trainingFreq] ?? 4;
+}
+// Evenly spaced training days for N sessions across 7 days, rotated by `offset`.
+// Spacing is what protects recovery, so it is fixed; only the rotation is free.
+function trainingPattern(n, offset){
+  const set = new Set();
+  for(let i=0;i<n;i++) set.add((Math.round(i*7/n) + offset) % 7);
+  return set;
+}
+// Weekly training/rest plan. Recovery spacing decides WHICH days you train; weather is
+// only a tiebreaker between rotations that are equally good for recovery.
 function planWeek(p){
   const f=p.forecast; if(!Array.isArray(f)||f.length<2) return null;
   const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const freqMap={'1-2':2,'3-4':3,'5+':5};
-  const trainCount=freqMap[p.trainingFreq]??3;
+  const trainCount=Math.max(0, Math.min(7, weeklySessions(p)));
   const trainDecimal={morning:7,afternoon:14,evening:20}[p.trainingTime]??null;
   const days=f.map((d,i)=>{
     const dt=new Date(d.date+'T12:00');
     return {...d, i, name:DOW[dt.getDay()],
       outdoorOK:(d.precipProb==null?true:d.precipProb<40)&&(d.tmax==null||d.tmax>=8)};
   });
-  const restCount=Math.max(0,7-trainCount);
-  const byClear=[...days].sort((a,b)=>(a.precipProb??0)-(b.precipProb??0)||(a.precip??0)-(b.precip??0));
-  const restSet=new Set(byClear.slice(0,restCount).map(d=>d.i));
-  days.forEach(d=>{ d.suggestion=restSet.has(d.i)?'rest':'train'; d.outside=d.outdoorOK; });
+  // Every rotation has identical spacing, so pick the one that lands training on the
+  // driest days. Weather never changes how many sessions or how they are spaced.
+  let trainSet = new Set();
+  if(trainCount > 0 && trainCount < 7){
+    let bestWet = Infinity;
+    for(let off=0; off<7; off++){
+      const cand = trainingPattern(trainCount, off);
+      let wet = 0;
+      days.forEach(d => { if(cand.has(d.i)) wet += (d.precipProb ?? 0); });
+      if(wet < bestWet){ bestWet = wet; trainSet = cand; }
+    }
+  } else if(trainCount >= 7){ days.forEach(d => trainSet.add(d.i)); }
+  days.forEach(d=>{
+    const training = trainSet.has(d.i);
+    d.suggestion = training ? 'train' : 'rest';
+    d.indoor = training && !d.outdoorOK;      // wet training day: move it indoors, do not skip it
+    d.outside = !training && d.outdoorOK;     // clear rest day: good one to get outdoors
+  });
   const warm=days.filter(d=>d.tmax!=null&&d.tmax>15);
   const lastWarmDay=warm.length?warm[warm.length-1]:null;
   const sunsetBeforeTraining=(trainDecimal!=null)?days.find(d=>d.sunset!=null&&d.sunset<trainDecimal):null;
@@ -1465,10 +1501,12 @@ function drawClock(h){
   // (which may run past 24 when bedtime is after midnight).
   const hL = dayH(h, profile);
 
-  // Dip-walk highlight — when the ~15-min walk window is open, brighten that arc so it
-  // reads as a window open now and closing. Renders nothing when inactive.
+  // Light-window highlight — when the morning-light or dip-walk window is open, brighten
+  // that arc so it reads as a window open now and closing. Nothing renders when inactive.
   try{
-    const dw = getDayWindows(profile).find(w => w.name === 'dipWalk');
+    const _lw = getDayWindows(profile);
+    const dw = _lw.find(w => w.name === 'morningLight' && hL >= w.start && hL < w.end)
+            || _lw.find(w => w.name === 'dipWalk');
     if(dw && hL >= dw.start && hL < dw.end){
       const dwAng = hh => (hh/24)*Math.PI*2 - Math.PI/2;
       const a0 = dwAng(dw.start), a1 = dwAng(dw.end);
@@ -1782,6 +1820,8 @@ function getDayWindows(p){
   add('windDown',     'cognitive', bedL - 1.5,       bedL,              'MODERATE');
 
   // Meals & recovery (anchored to wake / training, never offset).
+  // Morning light is the single biggest circadian lever, so it gets its own window.
+  add('morningLight', 'recovery', wake + 0.25, wake + 1.25, null);
   add('breakfast', 'meal',     wake + 0.5, wake + 1.5,  null);
   add('lunch',     'meal',     wake + 4,   wake + 5,    null);
   add('dipWalk',   'recovery', wake + 5.5, wake + 5.75, null);
@@ -1977,7 +2017,7 @@ const SHORT_NAME = { vitd:'vitamin D3', magnesium:'magnesium', omega3:'omega-3',
   creatine:'creatine', iron:'iron' };
 const WINDOW_NAME = { sleepInertia:'Sleep inertia', deepWork:'Deep work', trough:'Trough',
   secondWindow:'Second window', physicalPeak:'Physical peak', windDown:'Wind-down', neutral:'Steady',
-  dipWalk:'Before the dip', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
+  morningLight:'Morning light', dipWalk:'Before the dip', breakfast:'Breakfast', lunch:'Lunch', mainMeal:'Main meal',
   postTraining:'Post-training meal', sleep:'Asleep' };
 const WINDOW_LINE = {
   sleepInertia:'Grogginess in the first 30 to 60 minutes after waking. Do not judge the day by how you feel now, it lifts on its own.',
@@ -1995,7 +2035,8 @@ const WINDOW_LINE = {
   sleep:'Asleep, or heading there. Nothing to act on right now.'
 };
 window.openWindowPopup = function(name, start, end){
-  const line = name === 'dipWalk' ? dipWalkLine(profile) : WINDOW_LINE[name]; if(!line) return;
+  const line = name === 'dipWalk' ? dipWalkLine(profile)
+    : name === 'morningLight' ? morningLightLine(profile) : WINDOW_LINE[name]; if(!line) return;
   const NAMED = ['sleepInertia','deepWork','trough','secondWindow','physicalPeak','windDown'];
   let next = null;
   try{ next = getDayWindows(profile).filter(w=>NAMED.includes(w.name)).sort((a,b)=>a.start-b.start)
@@ -2020,6 +2061,22 @@ function dipWalkLine(p){
   if(typeof p.uvToday === 'number' && p.uvToday >= 3) s += ` UV is ${Math.round(p.uvToday)} today, so this covers your vitamin D as well.`;
   return s;
 }
+// Morning-light copy is dynamic: if the sun is not up yet where they are, telling them
+// to go outside would be wrong, so it points at a lamp instead.
+function morningLightLine(p){
+  const wake = p.wakeTime ?? p.wake, sr = p.sunriseToday;
+  const beforeSunrise = typeof sr === 'number' && typeof wake === 'number' && (wake + 1.25) <= sr;
+  if(beforeSunrise){
+    return `The sun does not rise until ${fmt(sr)} today, so there is no daylight to get yet. `
+      + 'A 10,000 lux lamp for ten minutes does the same job until the mornings come back.';
+  }
+  let s = 'Ten minutes outside in the next hour anchors your body clock for the whole day. '
+        + 'Indoor lighting is 10-100x too dim to do it, so it has to be outdoors.';
+  if(typeof sr === 'number' && typeof wake === 'number' && wake < sr){
+    s = `Daylight starts at ${fmt(sr)}. Get ten minutes outside as soon as it does. ` + s.split('. ').slice(1).join('. ');
+  }
+  return s;
+}
 // The single "now" phase, by priority: dipWalk > supplement due > physicalPeak (only
 // when training is within 2h) > meal > cognitive > physicalPeak, falling back to a
 // steady gap, or sleep outside the waking day. There is never a moment nothing is true.
@@ -2030,6 +2087,7 @@ function getCurrentPhase(h, p){
   let wins; try{ wins = getDayWindows(p); }catch(e){ return null; }
   const bn = {}; wins.forEach(w => bn[w.name] = w);
   const on = w => w && hL >= w.start && hL < w.end;
+  if(on(bn.morningLight)) return { key:'morningLight', start:bn.morningLight.start, end:bn.morningLight.end };
   if(on(bn.dipWalk)) return { key:'dipWalk', start:bn.dipWalk.start, end:bn.dipWalk.end };
   const due = (p.supplements||[]).map(k=>supView(k,p)).filter(s => s && !s.anytime && !takenToday.includes(s.key) && hL >= s.window[0] && hL < s.window[1]).sort((a,b)=>a.window[0]-b.window[0])[0];
   if(due) return { key:'supplement', sup:due, start:due.window[0], end:due.window[1] };
@@ -2179,8 +2237,10 @@ function weekPlanCard(){
   const cols = plan.days.map((d,i)=>{
     const hedged = i >= 3;                                   // days 4-7 recede
     const isToday = i === 0;                                 // forecast[0] is today
-    const sug = d.suggestion==='rest' ? 'rest' : (d.outside ? 'outside' : 'train');
-    const sugColor = sug==='rest' ? 'var(--muted)' : sug==='outside' ? 'var(--orange)' : 'var(--ink)';
+    // train / indoor (wet training day) / outside (clear rest day) / rest
+    const sug = d.suggestion==='train' ? (d.indoor ? 'indoor' : 'train') : (d.outside ? 'outside' : 'rest');
+    const sugColor = sug==='train' ? 'var(--ink)' : sug==='indoor' ? 'rgba(26,22,18,0.55)'
+      : sug==='outside' ? 'var(--orange)' : 'var(--muted)';
     return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;${hedged?'opacity:0.5;':''}${isToday?'background:rgba(26,22,18,0.06);border-radius:8px;padding:6px 0 5px;margin:-6px 0 -5px;':''}">
       <div style="font-size:9.5px;letter-spacing:0.05em;color:${isToday?'var(--ink)':'var(--muted)'};text-transform:uppercase;font-weight:${isToday?'700':'400'};">${d.name}</div>
       <div style="height:15px;line-height:0;">${_wxGlyph(d)}</div>
