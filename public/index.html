@@ -1346,11 +1346,18 @@ function buildDash(){
 
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
+      ${cardHead('your day and night', 'where daylight falls against when you sleep.')}
       <div class="arc-ring-wrap" style="position:relative;">
         <canvas id="main-clock" width="680" height="680" style="display:block;width:290px;height:290px;"></canvas>
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:2px;font-size:10px;color:var(--muted);">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${rgbTone('sharp')};"></span>awake</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${rgbTone('night')};"></span>asleep</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:2px;background:rgba(232,82,10,0.95);"></span>now</span>
+        <span style="display:flex;align-items:center;gap:5px;">☀ ☾ sunrise, sunset</span>
       </div>
     </div>
 
@@ -1715,17 +1722,22 @@ function evidenceGrade(ev){
 function contradictionInner(r){
   const g=evidenceGrade(r.evidence);
   const fixes=[...r.fixes].sort((a,b)=>{const av=a.cost==='free'?-1:a.cost,bv=b.cost==='free'?-1:b.cost;return av-bv;});
+  const wid = 'why-' + r.id;
   return `
+    ${cardHead('tonight\'s lever', 'the highest-value change available to you right now. one at a time.')}
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">the lever</div>
-      <span style="font-size:9px;font-weight:${g.weight};color:${g.color};border:0.5px ${g.border} ${g.color};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;flex-shrink:0;">${g.label}</span>
+      <div style="font-size:15px;font-weight:500;color:var(--ink);line-height:1.45;flex:1;">${r.contradiction}</div>
     </div>
-    <div style="font-size:13px;font-weight:500;color:var(--ink);line-height:1.55;margin-bottom:10px;">${r.contradiction}</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">${r.mechanism}</div>
-    ${r.effect?`<div style="font-size:11px;color:rgba(26,22,18,0.6);line-height:1.5;background:rgba(26,22,18,0.05);border-radius:8px;padding:9px 11px;margin-bottom:14px;"><span style="text-transform:uppercase;letter-spacing:0.06em;font-size:9px;color:var(--muted);">measured effect</span><br>${r.effect}</div>`:''}
-    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:2px;">
-      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.7);line-height:1.55;">${f.action}</span></div>`).join('')}
-    </div>`;
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;">
+      <span style="font-size:9px;font-weight:${g.weight};color:${g.color};border:0.5px ${g.border} ${g.color};border-radius:4px;padding:2px 6px;letter-spacing:0.05em;">${g.label} EVIDENCE</span>
+      ${r.effect?`<span style="font-size:10px;color:var(--muted);">${r.effect}</span>`:''}
+    </div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">what to do</div>
+    <div style="display:flex;flex-direction:column;gap:9px;">
+      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.72);line-height:1.5;">${f.action}</span></div>`).join('')}
+    </div>
+    <div onclick="event.stopPropagation();(function(e){e.style.display=e.style.display==='none'?'block':'none';})(document.getElementById('${wid}'))" style="font-size:11px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:0.5px solid var(--sep);cursor:pointer;">why this works →</div>
+    <div id="${wid}" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-top:9px;">${r.mechanism}${r.citation?`<div style="margin-top:8px;font-size:11px;color:rgba(26,22,18,0.42);line-height:1.55;">${r.citation}</div>`:''}</div>`;
 }
 
 // Lever adoption: the user says they have started doing something, and the app tracks
@@ -1788,17 +1800,23 @@ function wakeRegularityCard(){
   const spreadTxt = spread < 0.25 ? 'within a few minutes'
     : (h > 0 ? (m > 0 ? `by about ${h}h ${m}m` : `by about ${h} hours`) : `by about ${m} minutes`);
   const note = spread < 1
-    ? `Your wake time holds ${spreadTxt} across the week. That consistency is the thing worth protecting.`
-    : `Your wake time moves ${spreadTxt} across the week. Pulling the free-day end closer to the weekday one is the highest-value change available to you.`;
+    ? `Holding ${spreadTxt}. Worth protecting.`
+    : `Moving ${spreadTxt}. Pulling the free-day end closer is the highest-value change you can make.`;
   return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">wake time</div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">the shape of your week. no score, just where the mornings sit.</div>
+    ${cardHead('wake time', 'the one number this app cares about most. no score, just where your mornings sit.')}
     <div style="display:flex;gap:3px;align-items:flex-start;">${bars}</div>
     <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;">
       <span>${fmt(top)}</span><span>${fmt(bottom)}</span>
     </div>
-    <div style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.55;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
+    <div style="font-size:13px;color:var(--ink);line-height:1.5;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
   </div>`;
+}
+
+// Every card gets the same two-line head: what it is, then what it is for. Consistency
+// here is what stops the page reading as a wall of text.
+function cardHead(label, purpose){
+  return `<div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">${label}</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:13px;">${purpose}</div>`;
 }
 
 // ── SLEEP STATE CARD ─────────────────────────────────────────────────────────
@@ -1817,36 +1835,38 @@ function sleepStateCard(){
   const hL = dayH(h, p), bedL = bedLinear(p);
   const lightEnd = wake + 1, caffCut = bedL - 8, bathAt = bedL - 1.5, windAt = bedL - 0.5;
 
-  let label, line, foot = '', pct = null;
+  // do  = the instruction, short. why = the reason, one line. foot = countdown.
+  let label, doTxt, why, foot = '', pct = null;
   if(hL < wake){
-    label = 'still night';
-    line  = `Your wake time is ${fmt(wake)}. Holding it steady, even after a short night, is the single most useful thing you can do.`;
+    label = 'still night';  doTxt = `Wake at ${fmt(wake)}.`;
+    why = 'Holding the wake time steady, even after a short night, is the anchor everything else hangs off.';
   } else if(hL < lightEnd){
-    label = 'light window';
-    line  = 'Ten minutes outside in the next hour anchors your body clock for the day. Overcast counts.';
-    foot  = _countdown(lightEnd - hL); pct = ((hL - wake) / (lightEnd - wake)) * 100;
+    label = 'light window';  doTxt = 'Get ten minutes outside.';
+    why = 'Daylight now sets your body clock for tonight. Overcast counts.';
+    foot = _countdown(lightEnd - hL); pct = ((hL - wake) / (lightEnd - wake)) * 100;
   } else if(hL < caffCut){
-    label = 'caffeine window';
-    line  = `Last caffeine by ${fmt(caffCut)} to keep it clear of tonight. In the trial that measured this, people could not tell it was affecting them.`;
-    foot  = _countdown(caffCut - hL); pct = ((hL - lightEnd) / (caffCut - lightEnd)) * 100;
+    label = 'caffeine window';  doTxt = `Last caffeine by ${fmt(caffCut)}.`;
+    why = 'After that it is still circulating at bedtime, whether or not you feel it.';
+    foot = _countdown(caffCut - hL); pct = ((hL - lightEnd) / (caffCut - lightEnd)) * 100;
   } else if(hL < bathAt){
-    label = 'caffeine cutoff passed';
-    line  = `Anything from here is likely to still be circulating at ${fmt(bedL)}. A warm bath or shower at ${fmt(bathAt)} is the next thing worth doing.`;
+    label = 'no more caffeine';  doTxt = 'Nothing caffeinated from here.';
+    why = `It would still be in your system at ${fmt(bedL)}. Next up is a warm shower at ${fmt(bathAt)}.`;
   } else if(hL < windAt){
-    label = 'warm bath window';
-    line  = 'A warm bath or shower now, about ninety minutes before bed, cuts the time it takes to fall asleep. The delay is the point: it works through the cooling afterwards.';
-    foot  = _countdown(windAt - hL); pct = ((hL - bathAt) / (windAt - bathAt)) * 100;
+    label = 'warm shower window';  doTxt = 'Warm bath or shower now.';
+    why = 'Ninety minutes before bed. The cooling afterwards is what speeds up falling asleep.';
+    foot = _countdown(windAt - hL); pct = ((hL - bathAt) / (windAt - bathAt)) * 100;
   } else if(hL < bedL){
-    label = 'wind-down';
-    line  = 'The last half hour: no work, no email, no markets. Anything else is fine. It is the arousal that keeps you up, not the screen light.';
-    foot  = _countdown(bedL - hL); pct = ((hL - windAt) / (bedL - windAt)) * 100;
+    label = 'wind-down';  doTxt = 'No work, email or markets.';
+    why = 'Anything else is fine. It is the arousal that keeps you up, not the screen light.';
+    foot = _countdown(bedL - hL); pct = ((hL - windAt) / (bedL - windAt)) * 100;
   } else {
-    label = 'past your bedtime';
-    line  = `Whatever time you get to sleep, waking at ${fmt(wake)} keeps the anchor in place. Take the extra sleep at the front of tomorrow night, not the back.`;
+    label = 'past bedtime';  doTxt = `Still wake at ${fmt(wake)}.`;
+    why = 'Take the extra sleep at the front of tomorrow night, not the back.';
   }
   return `<div class="now-card" style="margin-bottom:12px;">
-    <div style="margin-bottom:7px;"><span class="now-window-label" style="margin-bottom:0;">now · ${label}</span></div>
-    <div class="now-window-desc" style="margin-bottom:${foot?'12px':'0'};">${line}</div>
+    <div class="now-window-label" style="margin-bottom:8px;">now · ${label}</div>
+    <div style="font-size:17px;font-weight:500;color:#EDE9E1;line-height:1.35;letter-spacing:-0.01em;margin-bottom:7px;">${doTxt}</div>
+    <div style="font-size:12px;color:rgba(237,233,225,0.5);line-height:1.55;margin-bottom:${foot?'13px':'0'};">${why}</div>
     ${pct!=null?`<div class="now-window-bar"><div class="now-window-fill" style="width:${Math.max(0,Math.min(100,pct))}%;"></div></div>`:''}
     ${foot?`<div class="now-window-footer">${foot}</div>`:''}
   </div>`;
