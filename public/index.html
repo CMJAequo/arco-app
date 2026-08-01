@@ -397,7 +397,7 @@ function getPhase(h,p){
 
 // ── STATE ──
 // No demo seed: a fresh visitor starts with an empty profile and goes through onboarding.
-// Onboarding fills this object and persists it to localStorage (see showDiagnosis / nextStep).
+// Onboarding fills this object and persists it to localStorage (see nextStep).
 let profile=JSON.parse(localStorage.getItem('arco-profile')||'null')||{};
 let checkins=JSON.parse(localStorage.getItem('arco-checkins')||'[]');
 let todayMod={cortisol:0,melatonin:0,testosterone:0,trained:false};
@@ -441,9 +441,12 @@ const steps=[
      if(window._cityChosen && typeof profile.lat==='number'){
        // coords already stored by pickCity / autoResolveCity
      } else if(cityText){
-       // free-text (no dropdown pick, e.g. geocoding unreachable): keep the label, fall back to London coords
+       // free-text (no dropdown pick, e.g. geocoding unreachable, or continue tapped before
+       // the debounced dropdown resolved): keep the label and fall back to London coords, then
+       // try to correct them in the background. Onboarding itself never waits on the network.
        profile.city=cityText;
        if(typeof profile.lat!=='number'){ applyCity(cityText,'',CITY_FALLBACK.lat,CITY_FALLBACK.lon,true); }
+       if(profile.cityFallback) resolveCityInBackground(cityText);
      }
    }
   },
@@ -553,7 +556,9 @@ const steps=[
      const ml=getChip('g-mlight'); if(ml!=null) profile.morningLight=(ml==='yes');
      const sc=getChip('g-screens'); if(sc!=null) profile.screensBeforeBed=parseInt(sc);
      const at=getChip('g-alctiming'); if(at!=null) profile.alcoholTiming=(at==='none'?null:at);
-     profile.sunlight = profile.morningLight ? 'always' : 'rarely';   // legacy field, still read by runDiagnosis
+     // Mapped into the engine profile by toContradictionProfile, but no lever reads it yet.
+     // Kept because it is the only record of morning light as a category rather than a boolean.
+     profile.sunlight = profile.morningLight ? 'always' : 'rarely';
    }
   },
   {title:'anything else that wakes you?',sub:'quick ones. skip any that do not apply.',
@@ -781,6 +786,31 @@ async function autoResolveCity(defCity){
     window._cityChosen = true;
     if(inp) inp.value = [profile.city, profile.country].filter(Boolean).join(', ');
   }catch(e){ /* silent: save() will free-text / fallback */ }
+}
+
+// A city typed but never picked from the dropdown lands on the London fallback, which
+// would otherwise give the wrong sunrise, sunset, air quality and pollen baseline under
+// the right city name — a silent error, since nothing on screen says the coordinates are
+// not the city shown. Onboarding must not block on a network call, so correct it after
+// the fact: resolve in the background and refresh anything already drawn from the old point.
+async function resolveCityInBackground(name){
+  if(!name) return;
+  try{
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`);
+    const j = await r.json();
+    const c = j && j.results && j.results[0];
+    if(!c) return;                                  // unresolvable: keep the fallback, still flagged approx
+    if(profile.city !== name) return;               // changed since: don't clobber a newer answer
+    applyCity(c.name, c.country||'', c.latitude, c.longitude, false, c.country_code);
+    try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+    try{ saveProfileRemote(); }catch(e){}
+    // The weather cache is keyed on lat,lon, so this refetches rather than serving the old city.
+    if(typeof loadWeather === 'function'){
+      loadWeather().then(()=>{
+        try{ if(document.getElementById('screen-dash').classList.contains('active')) buildDash(); }catch(e){}
+      }).catch(()=>{});
+    }
+  }catch(e){ /* silent: the fallback stays and the profile keeps showing it as approx */ }
 }
 
 // ── CHANGE CITY (Profile tab, one tap) ──
