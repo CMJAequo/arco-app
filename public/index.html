@@ -2321,9 +2321,7 @@ const RULES = [
     fires: (p) => Math.abs(circDiff(p.weekendWakeTime, p.wakeTime)) >= 1,
     effect: '20-48% lower all-cause mortality, most versus least regular quintile',
     contradiction:
-      'Your wake time moves by about {gap} between work days and free days. ' +
-      'Regularity of timing is more strongly associated with long-term outcomes ' +
-      'than how long you sleep is.',
+      'Your wake time moves by about {gap} between work days and free days.',
     mechanism:
       'A wake time that moves around shifts your circadian phase in the same way ' +
       'crossing time zones does. The body clock is anchored by when light first ' +
@@ -2353,8 +2351,8 @@ const RULES = [
     fires: (p) => hoursUntil(p.bedTime, p.wakeTime) < 7,
     effect: 'extending time in bed to 10h raised total sleep by 111 min and improved sprint time and shooting accuracy by about 9%',
     contradiction:
-      'You are giving yourself about {tib} in bed. Nothing else in this app ' +
-      'competes with simply widening that window.',
+      'You are giving yourself about {tib} in bed, which is the ceiling on ' +
+      'everything else here.',
     mechanism:
       'Time in bed is the ceiling on time asleep. Every other lever here works ' +
       'inside the window you allow, so the window comes first.',
@@ -2382,8 +2380,8 @@ const RULES = [
     fires: (p) => hoursUntil(p.lastCoffeeTime, p.bedTime) < 8,
     effect: '400mg taken six hours before bed cut objectively measured total sleep by more than an hour',
     contradiction:
-      'Your last caffeine is about {gap} before bed. In the trial that measured ' +
-      'this, people could not tell it was affecting them.',
+      'Your last caffeine is about {gap} before bed, inside the window where it ' +
+      'still costs you sleep.',
     mechanism:
       'Caffeine blocks adenosine, the molecule that builds sleep pressure across ' +
       'the day. Clearance varies two to three fold by CYP1A2 genotype, and oral ' +
@@ -2413,8 +2411,8 @@ const RULES = [
     fires: (p) => p.alcoholTiming === 'late',
     effect: 'about two drinks measurably cut REM; each additional 1 g/kg delayed REM onset by roughly 30 min and cut REM duration by roughly 40 min',
     contradiction:
-      'You tend to drink later in the evening. Alcohol shortens the time it takes ' +
-      'to fall asleep and then takes the second half of the night apart.',
+      'You tend to drink later in the evening, which takes the second half of the ' +
+      'night apart.',
     mechanism:
       'Alcohol is sedating early and disruptive late. As it clears, it suppresses ' +
       'and delays REM and fragments the back half of the night, which is why a ' +
@@ -2438,8 +2436,8 @@ const RULES = [
     fires: (p) => p.morningLight === false,
     effect: 'the primary circadian entrainment signal; advances sleep phase and stabilises timing',
     contradiction:
-      'You are not getting daylight in the hour after waking. That is the signal ' +
-      'your body clock uses to decide when tonight starts.',
+      'You are not getting daylight in the hour after waking, which is the signal ' +
+      'that sets tonight.',
     mechanism:
       'Light hitting the retina shortly after waking sets circadian timing and ' +
       'starts the countdown to melatonin release. Outdoor daylight is 1,000 to ' +
@@ -2466,8 +2464,8 @@ const RULES = [
     fires: (p) => p.sleepLatency >= 20,
     effect: 'sleep onset latency reduced by about 36%',
     contradiction:
-      'You take about {lat} minutes to fall asleep. A warm bath or shower 90 ' +
-      'minutes before bed is the best-evidenced thing you are probably not doing.',
+      'You take about {lat} minutes to fall asleep, and a warm bath ninety minutes ' +
+      'before bed is the best-evidenced fix you are probably not using.',
     mechanism:
       'Warming the skin causes peripheral vasodilation, which accelerates the core ' +
       'temperature drop that gates sleep onset. The delay is the point: the effect ' +
@@ -2492,8 +2490,8 @@ const RULES = [
     fires: (p) => p.nightWakings >= 2,
     effect: 'heat fragments sleep and reduces deep and REM; cooler rooms support the core temperature drop',
     contradiction:
-      'You wake {n} times most nights. Room temperature is one of the most common ' +
-      'causes of fragmentation and one of the easiest to change.',
+      'You wake {n} times most nights, and room temperature tends to be the easiest ' +
+      'cause of that to fix.',
     mechanism:
       'Sleep onset and maintenance depend on core temperature falling. A room that ' +
       'is too warm works against that all night, and tends to show up as waking ' +
@@ -2518,8 +2516,8 @@ const RULES = [
     fires: (p) => p.screensBeforeBed >= 30,
     effect: 'blue-blocking glasses reduced sleep onset latency by 4.86 min, not statistically significant, with no effect on sleep efficiency or wake after sleep onset',
     contradiction:
-      'You spend the last part of the evening on screens. The problem is what you ' +
-      'are doing on them, not the light coming out of them.',
+      'You spend the last hour on screens, and it tends to be what you are doing on ' +
+      'them rather than the light.',
     mechanism:
       'Cognitive and emotional arousal is the dominant mechanism. Work, email and ' +
       'markets keep the system engaged when it needs to disengage. Melatonin ' +
@@ -2545,9 +2543,8 @@ const RULES = [
     fires: (p) => hoursUntil(p.trainingTime + 1.5, p.bedTime) < 2,
     effect: 'no impairment from evening exercise overall; disruption only for vigorous sessions ending within about an hour of bed',
     contradiction:
-      'You finish training close to bedtime. For most people evening training does ' +
-      'not harm sleep at all, and this is worth knowing if you have been told ' +
-      'otherwise.',
+      'You finish training close to bedtime, which for most people does not harm ' +
+      'sleep at all.',
     mechanism:
       'Core temperature and sympathetic arousal stay elevated for a period after ' +
       'hard training. The effect on sleep is small unless the session is intense ' +
@@ -2574,7 +2571,8 @@ const RULES = [
     fires: (p) => p.napHabit === 'long-late',
     effect: 'long or late naps reduce overnight sleep drive; short early naps do not',
     contradiction:
-      'Long or late naps borrow from tonight. Short and early ones do not.',
+      'Long or late naps tend to borrow from tonight, while short early ones do ' +
+      'not.',
     mechanism:
       'Sleep pressure builds across the day. A long nap discharges it, and a late ' +
       'one discharges it close to when you need it most.',
@@ -2617,8 +2615,7 @@ const RULES = [
     fires: (p) => hoursUntil(p.eatingWindowEnd, p.bedTime) < 2,
     effect: 'modest: later and larger meals are associated with longer onset and more fragmentation',
     contradiction:
-      'You tend to finish eating close to bed. The effect is real but modest, so ' +
-      'treat it as a tidy-up rather than a priority.',
+      'You tend to finish eating close to bed, which has a real but modest effect.',
     mechanism:
       'Digestion raises core temperature and metabolic rate at the point where both ' +
       'need to fall for sleep onset.',
@@ -2639,7 +2636,7 @@ const RULES = [
     fires: (p) => p.bedroomDisturbance === true,
     effect: 'earplugs and eye masks improve measured sleep in disturbed environments at negligible cost',
     contradiction:
-      'Noise and light leakage are the cheapest problems in sleep to solve, and ' +
+      'Noise and light leakage tend to be the cheapest sleep problems to solve and ' +
       'the ones people put up with longest.',
     mechanism:
       'Both cause arousals you do not always remember, which is why the night can ' +
@@ -2662,7 +2659,7 @@ const RULES = [
                   has(p.meds, 'ssri') || has(p.meds, 'stimulant'),
     effect: 'beta-blockers suppress melatonin; SSRIs and stimulants affect REM and onset; sedating antihistamines reduce REM',
     contradiction:
-      'Something you take can affect sleep. This is worth knowing about, not ' +
+      'Something you take can affect sleep, which is worth knowing about but not ' +
       'worth changing on your own.',
     mechanism:
       'Beta-blockers suppress night-time melatonin. SSRIs and stimulants commonly ' +
@@ -2691,8 +2688,7 @@ const RULES = [
     fires: (p) => has(p.currentStack, 'magnesium'),
     effect: 'non-significant 16 min increase in total sleep across 3 RCTs',
     contradiction:
-      'You take magnesium. For sleep specifically the evidence is weak, and it is ' +
-      'worth knowing that before you rely on it.',
+      'You take magnesium, and for sleep specifically the evidence is weak.',
     mechanism:
       'Magnesium is a genuine cofactor in many processes and worth correcting if ' +
       'you are deficient. That is a different claim from improving sleep in someone ' +
@@ -2716,8 +2712,8 @@ const RULES = [
     fires: (p) => has(p.currentStack, 'melatonin'),
     effect: 'sleep onset latency reduced 7.06 min, total sleep +8.25 min',
     contradiction:
-      'Melatonin is a chronobiotic, not a sleeping pill. It shifts when you sleep ' +
-      'far more than it deepens it.',
+      'Melatonin shifts when you sleep far more than it deepens it, which makes it ' +
+      'a chronobiotic rather than a sleeping pill.',
     mechanism:
       'It signals biological night, so it is genuinely useful for circadian problems ' +
       'such as jet lag or a delayed phase, when it is taken at the right time. Taken ' +
@@ -2790,8 +2786,8 @@ const RULES = [
     fires: (p) => p.restlessLegs === true,
     effect: 'iron deficiency is one of the few nutrient states that genuinely causes a sleep disorder',
     contradiction:
-      'Restless legs is the one place where a deficiency really does cause the ' +
-      'sleep problem, and it is worth testing rather than guessing.',
+      'Restless legs is the one place where a deficiency is strongly implicated in the ' +
+      'sleep problem itself, and it is worth testing rather than guessing.',
     mechanism:
       'Low brain iron is strongly implicated in restless legs syndrome. Serum ' +
       'ferritin is the usual marker, and it can be low while a standard blood ' +
