@@ -356,19 +356,9 @@ const _supabase = supabase.createClient('https://fksvvkviffzbwrotyqco.supabase.c
 // The hormone engine that lived here (CURVES / lerp / clamp / baseVal / getHormones) was
 // removed: its only consumer was drawCurve, which was never called, so none of it reached
 // the screen. It also modelled a testosterone curve, which is not something this app has
-// any business asserting. getPhase below is unrelated and is still used by the dashboard.
-function getPhase(h,p){
-  const wake=p.wake??7;
-  if(h<wake-0.25)return{label:'deep sleep',advice:'Growth hormone peaks now. Every hour cut short reduces muscle repair and fat metabolism.'};
-  if(h<wake+0.5)return{label:'cortisol awakening',advice:'Cortisol at 50–100% above baseline. Suppresses testosterone for ~45 minutes. Get sunlight now. Don\'t train yet.'};
-  if(h<wake+2.5)return{label:'peak cortisol',advice:'Acetylcholine peak: focus and pattern recognition at their highest. Caffeine now extends the window. After 11:00 it delays sleep onset.'};
-  if(h<13)return{label:'peak focus',advice:'Prefrontal cortex at full capacity. Working memory, decision quality, verbal reasoning all peak now.'};
-  if(h<15)return{label:'afternoon dip',advice:'Core temp dropped ~0.5°C, the same trigger as sleep onset. 20 minutes enters Stage 2 sleep and restores alertness. Longer hits slow-wave and impairs waking.'};
-  if(h<17.5)return{label:'recovery window',advice:'Second cortisol curve. Reaction time and verbal processing return. Muscle temp 1°C above baseline, injury risk at daily low.'};
-  if(h<19.5)return{label:'wind down',advice:'Melatonin rising. Blue light delays it by up to 3 hours. Dim lights and reduce screen exposure now.'};
-  if(h<21)return{label:'melatonin rising',advice:'Core temp falling. A warm shower dilates skin vessels to release heat, accelerating the drop and reducing sleep onset time.'};
-  return{label:'sleep prep',advice:'Core temp needs to drop about 1°C to trigger sleep onset. Cooler rooms, roughly 17-19°C, tend to support this and warmer ones tend to fragment sleep.'};
-}
+// any business asserting. getPhase went with it: buildDash still called it, but assigned the
+// result to a variable it never read, so none of its nine labels or advice strings had
+// reached the screen either. That block carried the last testosterone claim in the file.
 
 // ── STATE ──
 // No demo seed: a fresh visitor starts with an empty profile and goes through onboarding.
@@ -922,7 +912,6 @@ async function loadWeather(){
 
 function buildDash(){
   const now=new Date(),h=now.getHours()+now.getMinutes()/60;
-  const phase=getPhase(h,profile);
   const name = (profile && profile.name && profile.name !== 'you') ? profile.name : 'Cons';
   const hr=now.getHours();
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
