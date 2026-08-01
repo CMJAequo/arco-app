@@ -1510,14 +1510,26 @@ function drawClock(h){
             || _lw.find(w => w.name === 'dipWalk');
     if(dw && hL >= dw.start && hL < dw.end){
       const dwAng = hh => (hh/24)*Math.PI*2 - Math.PI/2;
-      const a0 = dwAng(dw.start), a1 = dwAng(dw.end);
       const dp = (Math.sin(Date.now()/500) + 1) / 2;
-      ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
-      ctx.strokeStyle = `rgba(255,240,205,${0.14 + dp*0.14})`; ctx.lineWidth = SW + 9*dpr; ctx.stroke();  // glow
-      ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
-      ctx.strokeStyle = `rgba(255,249,230,${0.6 + dp*0.32})`; ctx.lineWidth = SW; ctx.stroke();           // bright core
-      ctx.lineCap = 'butt';
+      const span = dw.end - dw.start;
+      if(span <= 0.75){
+        // Short window: a true circle centred on the ring, not a stubby round-capped arc
+        // (which renders as a lozenge at this length).
+        const am = dwAng((dw.start + dw.end) / 2);
+        const mx = cx + Math.cos(am) * r, my = cy + Math.sin(am) * r;
+        ctx.beginPath(); ctx.arc(mx, my, SW/2 + 4.5*dpr, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,240,205,${0.14 + dp*0.14})`; ctx.fill();                    // glow
+        ctx.beginPath(); ctx.arc(mx, my, SW/2, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,249,230,${0.6 + dp*0.32})`; ctx.fill();                     // bright core
+      } else {
+        const a0 = dwAng(dw.start), a1 = dwAng(dw.end);
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
+        ctx.strokeStyle = `rgba(255,240,205,${0.14 + dp*0.14})`; ctx.lineWidth = SW + 9*dpr; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1);
+        ctx.strokeStyle = `rgba(255,249,230,${0.6 + dp*0.32})`; ctx.lineWidth = SW; ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
     }
   }catch(e){}
 
