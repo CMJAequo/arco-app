@@ -477,24 +477,45 @@ const steps=[
      }
    }
   },
-  {title:'how do you sleep?',sub:'sleep is the master variable. everything builds from here.',
+  {title:'how do you sleep?',sub:'no score, no grade. these are just the things that move sleep.',
    render:()=>`
-    <div class="field-label">average sleep quality</div>
-    <div class="slider-wrap"><div class="slider-row"><input type="range" min="1" max="5" value="${profile.sleepQuality??3}" step="1" id="f-sq" oninput="document.getElementById('f-sqv').textContent=this.value"><span class="slider-val" id="f-sqv">${profile.sleepQuality??3}</span></div><div class="slider-labels"><span>poor</span><span>excellent</span></div></div>
+    <div class="field-label">roughly how long to fall asleep?</div>
+    <div class="chip-group" id="g-latency">
+      ${[[5,'under 10 min'],[15,'10 to 20 min'],[30,'20 to 45 min'],[50,'over 45 min']].map(([v,l])=>`<div class="chip${profile.sleepLatency===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-latency','ink')">${l}</div>`).join('')}
+    </div>
     <div class="field-label">how many times do you wake in the night?</div>
     <div class="chip-group" id="g-wakings">
-      ${[['0','none'],['1','once'],['2','twice'],['3','three or more']].map(([v,l])=>`<div class="chip${String(profile.nightWakings)===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-wakings','ink')">${l}</div>`).join('')}
+      ${[[0,'none'],[1,'once'],[2,'twice'],[3,'three or more']].map(([v,l])=>`<div class="chip${profile.nightWakings===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-wakings','ink')">${l}</div>`).join('')}
     </div>
-    <div class="field-label">chronotype</div>
-    <div class="chip-group" id="g-chrono">
-      <div class="chip${profile.chronotype==='early'?' sel-ink':''}" data-val="early" onclick="selChip(this,'g-chrono','ink')">early bird</div>
-      <div class="chip${profile.chronotype==='neutral'?' sel-ink':''}" data-val="neutral" onclick="selChip(this,'g-chrono','ink')">neutral</div>
-      <div class="chip${profile.chronotype==='late'?' sel-ink':''}" data-val="late" onclick="selChip(this,'g-chrono','ink')">night owl</div>
+    <div class="field-label">when you wake, do you get back to sleep easily?</div>
+    <div class="chip-group" id="g-resume">
+      <div class="chip${profile.resumeEasily===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-resume','ink')">usually yes</div>
+      <div class="chip${profile.resumeEasily===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-resume','ink')">often lie awake</div>
     </div>`,
    save:()=>{
-     profile.sleepQuality=parseInt(document.getElementById('f-sq').value)||3;
-     const nw=getChip('g-wakings'); if(nw!=null) profile.nightWakings=parseInt(nw);
-     profile.chronotype=getChip('g-chrono')||'neutral';
+     const lat=getChip('g-latency'); if(lat!=null) profile.sleepLatency=parseInt(lat);
+     const nw=getChip('g-wakings');  if(nw!=null) profile.nightWakings=parseInt(nw);
+     const re=getChip('g-resume');   if(re!=null) profile.resumeEasily=(re==='yes');
+     // The hormone curves still want a 1-5 quality figure, but asking for it is a worse
+     // measurement than deriving it from onset and fragmentation, which are more robust
+     // to self-report. Never shown to the user.
+     profile.sleepQuality = derivedSleepQuality(profile);
+   }
+  },
+  {title:'the last month',sub:'two questions. they decide whether arco should point you somewhere better than an app.',
+   render:()=>`
+    <div class="field-label">how many nights a week have you had trouble sleeping?</div>
+    <div class="chip-group" id="g-sci-nights">
+      ${[[0,'rarely'],[1,'1 night'],[2,'2 nights'],[3,'3 nights'],[4,'4 or more']].map(([v,l])=>`<div class="chip${profile.sciNights===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-sci-nights','ink')">${l}</div>`).join('')}
+    </div>
+    <div class="field-label">how much does your sleep affect your daytime energy, mood or focus?</div>
+    <div class="chip-group" id="g-sci-impact">
+      ${[[0,'not at all'],[1,'a little'],[2,'somewhat'],[3,'a lot'],[4,'very much']].map(([v,l])=>`<div class="chip${profile.sciImpact===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-sci-impact','ink')">${l}</div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.55;">arco does not diagnose anything and never will. these two answers only decide whether it should mention that better help exists.</div>`,
+   save:()=>{
+     const n=getChip('g-sci-nights'); if(n!=null) profile.sciNights=parseInt(n);
+     const im=getChip('g-sci-impact'); if(im!=null) profile.sciImpact=parseInt(im);
    }
   },
   {title:'your day',sub:'timing is the highest-leverage thing we can fix. give us your real times.',
@@ -577,15 +598,55 @@ const steps=[
     </div>`,
    save:()=>{profile.workType=getChip('g-work')||'corporate';profile.workStart=parseFloat(document.getElementById('f-wstart').value)||9;profile.workEnd=parseFloat(document.getElementById('f-wend').value)||18;profile.flexibility=getChip('g-flex')||'some';}
   },
-  {title:'a few last things',sub:'small habits that shift your arc more than most people realise.',
+  {title:'your evenings',sub:'the levers with the strongest evidence behind them.',
    render:()=>`
-    <div class="field-label">caffeine habit</div>
-    <div class="chip-group" id="g-caff"><div class="chip${profile.caffeine==='none'?' sel-ink':''}" data-val="none" onclick="selChip(this,'g-caff','ink')">none</div><div class="chip${profile.caffeine==='morning'?' sel-ink':''}" data-val="morning" onclick="selChip(this,'g-caff','ink')">morning only</div><div class="chip${profile.caffeine==='afternoon'?' sel-ink':''}" data-val="afternoon" onclick="selChip(this,'g-caff','ink')">into afternoon</div><div class="chip${profile.caffeine==='evening'?' sel-ink':''}" data-val="evening" onclick="selChip(this,'g-caff','ink')">evening too</div></div>
-    <div class="field-label">primary goal</div>
-    <div class="chip-group" id="g-goal"><div class="chip${profile.goal==='performance'?' sel-ink':''}" data-val="performance" onclick="selChip(this,'g-goal','ink')">performance</div><div class="chip${profile.goal==='recovery'?' sel-ink':''}" data-val="recovery" onclick="selChip(this,'g-goal','ink')">recovery</div><div class="chip${profile.goal==='focus'?' sel-ink':''}" data-val="focus" onclick="selChip(this,'g-goal','ink')">deep focus</div><div class="chip${profile.goal==='sleep'?' sel-ink':''}" data-val="sleep" onclick="selChip(this,'g-goal','ink')">better sleep</div></div>
-    <div class="field-label">morning sunlight?</div>
-    <div class="chip-group" id="g-sun"><div class="chip${profile.sunlight==='always'?' sel-ink':''}" data-val="always" onclick="selChip(this,'g-sun','ink')">always</div><div class="chip${profile.sunlight==='sometimes'?' sel-ink':''}" data-val="sometimes" onclick="selChip(this,'g-sun','ink')">sometimes</div><div class="chip${profile.sunlight==='rarely'?' sel-ink':''}" data-val="rarely" onclick="selChip(this,'g-sun','ink')">rarely</div></div>`,
-   save:()=>{profile.caffeine=getChip('g-caff')||'morning';profile.goal=getChip('g-goal')||'performance';profile.sunlight=getChip('g-sun')||'sometimes';}
+    <div class="field-label">daylight within an hour of waking?</div>
+    <div class="chip-group" id="g-mlight">
+      <div class="chip${profile.morningLight===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-mlight','ink')">most days</div>
+      <div class="chip${profile.morningLight===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-mlight','ink')">rarely</div>
+    </div>
+    <div class="field-label">screen time in the last hour before bed</div>
+    <div class="chip-group" id="g-screens">
+      ${[[0,'none'],[15,'under 30 min'],[45,'30 to 60 min'],[60,'the whole hour']].map(([v,l])=>`<div class="chip${profile.screensBeforeBed===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-screens','ink')">${l}</div>`).join('')}
+    </div>
+    <div class="field-label">when do you usually drink?</div>
+    <div class="chip-group" id="g-alctiming">
+      ${[['with-dinner','with dinner'],['late','later in the evening'],['varies','it varies'],['none','I do not drink']].map(([v,l])=>`<div class="chip${profile.alcoholTiming===v||(v==='none'&&('alcoholTiming' in profile)&&profile.alcoholTiming===null)?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-alctiming','ink')">${l}</div>`).join('')}
+    </div>`,
+   save:()=>{
+     const ml=getChip('g-mlight'); if(ml!=null) profile.morningLight=(ml==='yes');
+     const sc=getChip('g-screens'); if(sc!=null) profile.screensBeforeBed=parseInt(sc);
+     const at=getChip('g-alctiming'); if(at!=null) profile.alcoholTiming=(at==='none'?null:at);
+     profile.sunlight = profile.morningLight ? 'always' : 'rarely';   // legacy field, still read by runDiagnosis
+   }
+  },
+  {title:'anything else that wakes you?',sub:'quick ones. skip any that do not apply.',
+   render:()=>`
+    <div class="field-label">nicotine in any form?</div>
+    <div class="chip-group" id="g-nicotine">
+      <div class="chip${profile.nicotine===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-nicotine','ink')">yes</div>
+      <div class="chip${profile.nicotine===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-nicotine','ink')">no</div>
+    </div>
+    <div class="field-label">naps</div>
+    <div class="chip-group" id="g-naps">
+      ${[['none','I do not nap'],['short-early','short and early'],['long-late','long or late in the day']].map(([v,l])=>`<div class="chip${profile.napHabit===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-naps','ink')">${l}</div>`).join('')}
+    </div>
+    <div class="field-label">noise or light in the bedroom?</div>
+    <div class="chip-group" id="g-disturb">
+      <div class="chip${profile.bedroomDisturbance===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-disturb','ink')">yes, it wakes me</div>
+      <div class="chip${profile.bedroomDisturbance===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-disturb','ink')">no</div>
+    </div>
+    <div class="field-label">restless or crawling feelings in your legs at night?</div>
+    <div class="chip-group" id="g-rls">
+      <div class="chip${profile.restlessLegs===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-rls','ink')">yes</div>
+      <div class="chip${profile.restlessLegs===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-rls','ink')">no</div>
+    </div>`,
+   save:()=>{
+     const n=getChip('g-nicotine'); if(n!=null) profile.nicotine=(n==='yes');
+     const np=getChip('g-naps'); if(np!=null) profile.napHabit=np;
+     const d=getChip('g-disturb'); if(d!=null) profile.bedroomDisturbance=(d==='yes');
+     const r=getChip('g-rls'); if(r!=null) profile.restlessLegs=(r==='yes');
+   }
   },
   {title:'last few things',sub:'these inputs directly determine your personalised protocol.',
    render:()=>`
@@ -1778,6 +1839,31 @@ function dayH(h, p){
   return h < wake ? h + 24 : h;
 }
 
+// SCI-02 signposting. Deliberately NOT a score and NOT a diagnosis: it decides only
+// whether the app should mention that effective help exists. It never names a condition,
+// never shows a number, and never tells the user what they have.
+function needsSignposting(p){
+  p = p || profile;
+  return (p.sciNights ?? 0) >= 3 && (p.sciImpact ?? 0) >= 2;
+}
+const SIGNPOST_TEXT =
+  'Sleep problems that last more than a few weeks and affect your days are common and ' +
+  'treatable. CBT-I is the recommended first-line option in the UK, ahead of medication, ' +
+  'and it is worth speaking to your GP. Sleepio is recommended by NICE and is free on ' +
+  'prescription in parts of the NHS.';
+
+// Internal 1-5 sleep-quality proxy for the hormone curves only. Derived from onset and
+// fragmentation, which are more robust to self-report than a quality slider. This is
+// never displayed: the app shows no sleep score or grade of any kind.
+function derivedSleepQuality(p){
+  let q = 5;
+  const lat = p.sleepLatency, nw = p.nightWakings;
+  if(lat != null) q -= lat >= 45 ? 2 : lat >= 20 ? 1 : 0;
+  if(nw  != null) q -= nw >= 3 ? 2 : nw >= 1 ? 1 : 0;
+  if(p.resumeEasily === false) q -= 1;
+  return Math.max(1, Math.min(5, q));
+}
+
 // ── SHARED DAY PALETTE ───────────────────────────────────────────────────────
 // One palette and one set of phase divisions for BOTH the clock ring and the day
 // strip, so the circle and the bar are the same system in two shapes.
@@ -1842,55 +1928,14 @@ function buildSchedule(h,p){
 // ── ROTATING DAILY QUESTIONS ──
 // Daily check-in questions acquire the remaining engine fields. Each maps to a profile
 // field; toProfile() converts the raw answer to the typed value the engine expects.
+// The only daily input. A coaching signal, not a measurement, and deliberately about
+// daytime function rather than the night itself: no score, no grade, nothing to fail at.
 const DAILY_QUESTIONS = [
-  { field:'morningLight', type:'chips',
-    title:'Did you get outside within an hour of waking?',
-    sub:'Morning light is the primary signal that sets your body clock for the day.',
-    options:['yes','no'], vals:['yes','no'], toProfile:a=>a==='yes' },
-  { field:'proteinBreakfast', type:'chips',
-    title:'Did you have protein at breakfast?',
-    sub:'Protein distribution across the day drives repair, not just the daily total.',
-    options:['yes','no'], vals:['yes','no'], toProfile:a=>a==='yes' },
-  { field:'weekendWakeTime', type:'time',
-    title:'On a free day with no alarm, when do you wake?',
-    sub:'Your natural wake time, not the workday one.',
-    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
-  { field:'weekendBedTime', type:'time',
-    title:'On a free day with no alarm, when do you go to sleep?',
-    sub:'Your natural bedtime. With your free-day wake time, this sets your chronotype.',
-    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
-  { field:'screensBeforeBed', type:'chips',
-    title:'Screen time in the last hour before bed?',
-    sub:'Cognitive arousal keeps you wired when you need to wind down.',
-    options:['none','under 30 min','30 to 60 min','the whole hour'], vals:['0','15','45','60'], toProfile:a=>parseInt(a) },
-  { field:'sleepLatency', type:'chips',
-    title:'How long does it take you to fall asleep?',
-    sub:'Onset over 20 minutes often points to caffeine, stress or magnesium.',
-    options:['under 10 min','10 to 20 min','20 to 45 min','over 45 min'], vals:['5','15','30','50'], toProfile:a=>parseInt(a) },
-  { field:'nightWakings', type:'chips',
-    title:'How many times do you wake in the night?',
-    sub:'Fragmented sleep late in the night is often alcohol or late eating.',
-    options:['none','once','twice','three or more'], vals:['0','1','2','3'], toProfile:a=>parseInt(a) },
-  { field:'eatingWindowEnd', type:'time',
-    title:'When do you usually finish eating?',
-    sub:'Eating close to bed keeps core temperature up when it needs to fall.',
-    toProfile:a=>{if(!a)return null;const x=a.split(':').map(Number);return x[0]+(x[1]||0)/60;} },
-  { field:'sitLongestBlock', type:'chips',
-    title:'Longest stretch you sit without getting up?',
-    sub:'Uninterrupted sitting has effects that training does not fully undo.',
-    options:['under 2h','2 to 4h','4 to 6h','6h or more'], vals:['1','3','5','7'], toProfile:a=>parseInt(a) },
-  { field:'commuteMode', type:'chips',
-    title:'How do you usually get to work?',
-    sub:'Your commute is a daily exposure you have probably never weighed.',
-    options:['underground','overground','cycle','walk','car','I work from home'], vals:['underground','overground','cycle','walk','car','none'], toProfile:a=>a },
-  { field:'commuteMinutes', type:'chips',
-    title:'How long is your commute, each way?',
-    sub:'',
-    options:['under 15 min','15 to 30 min','30 to 45 min','45 min or more'], vals:['10','22','37','50'], toProfile:a=>parseInt(a) },
-  { field:'alcoholTiming', type:'chips',
-    title:'When do you usually drink?',
-    sub:'For sleep, timing matters more than amount. A late drink is why you wake at 4am.',
-    options:['with dinner','later in the evening','it varies','I do not drink'], vals:['with-dinner','late','varies','none'], toProfile:a=>a==='none'?null:a }
+  { field:'refreshed', type:'slider', min:1, max:5, default:3,
+    labels:['not at all','completely'],
+    title:'How refreshed do you feel?',
+    sub:'One tap. There is no right answer and nothing to score.',
+    toProfile:a=>parseInt(a) }
 ];
 
 let currentQuestion = null;
@@ -1898,13 +1943,8 @@ let currentQAnswer = null;
 
 // Ask the unanswered field that would unlock the most rules next.
 function getNextQuestion(){
-  const eng = toContradictionProfile(profile);
-  const ranked = nextBestQuestions(eng, 30);
-  for(const {field} of ranked){
-    const q = DAILY_QUESTIONS.find(x=>x.field===field);
-    if(q && (profile[field]===undefined || profile[field]===null)) return q;
-  }
-  return DAILY_QUESTIONS.find(x=>profile[x.field]===undefined || profile[x.field]===null) || DAILY_QUESTIONS[0];
+  // One daily question, asked every day. Nothing to rank any more.
+  return DAILY_QUESTIONS[0];
 }
 
 // Evidence badge (same treatment as the diagnosis evidence badges) + shared contradiction body.
@@ -3190,7 +3230,8 @@ function toContradictionProfile(p){
   if(p.stress!=null) e.stress = p.stress;
   if(p.latBand!=null) e.latBand = p.latBand;
   if(p.trainingFreq!=null && trainingDaysMap[p.trainingFreq]!=null) e.trainingDays = trainingDaysMap[p.trainingFreq];
-  if(p.trainingTime!=null && trainingTimeMap[p.trainingTime]!=null) e.trainingTime = trainingTimeMap[p.trainingTime];
+  if(typeof p.trainingTime==='number') e.trainingTime = p.trainingTime;
+  else if(p.trainingTime!=null && trainingTimeMap[p.trainingTime]!=null) e.trainingTime = trainingTimeMap[p.trainingTime];
   if(p.diet!=null && meatMap[p.diet]!=null) e.meat = meatMap[p.diet];
   if(p.fish!=null) e.fish = fishMap[p.fish] ?? p.fish;
   if(p.sunlight!=null) e.sunlight = sunlightMap[p.sunlight] ?? p.sunlight;
