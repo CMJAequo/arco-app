@@ -131,7 +131,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 .save-resend{background:none;border:none;color:var(--muted);font-size:12px;font-family:var(--font);cursor:pointer;text-decoration:underline;text-underline-offset:3px;margin-top:12px;}
 
 /* DASHBOARD TOP BAR */
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px 14px;background:var(--bg);}
+.topbar{display:flex;justify-content:center;align-items:center;padding:10px 20px 14px;background:var(--bg);}
 .topbar-streak{display:flex;align-items:center;gap:5px;background:var(--card);border-radius:20px;padding:6px 12px;}
 .topbar-streak-count{color:var(--ink);font-size:12px;font-weight:500;}
 .topbar-streak-label{color:var(--ink);font-size:12px;font-weight:500;}
@@ -318,18 +318,7 @@ body{font-family:var(--font);background:#d4cfc7;display:flex;justify-content:cen
 <!-- DASHBOARD -->
 <div class="screen" id="screen-dash">
   <div class="topbar">
-    <div class="topbar-streak">
-      <span class="topbar-today-arrow" style="transform:rotate(180deg);display:inline-block;">›</span>
-      <span class="topbar-streak-count" id="streak-ct">1</span>
-      <span class="topbar-streak-label">day</span>
-      <span class="topbar-today-arrow">›</span>
-    </div>
     <span style="font-size:22px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;">arco</span>
-    <div class="topbar-today">
-      <span class="topbar-today-arrow" style="transform:rotate(180deg);display:inline-block;">›</span>
-      <span class="topbar-today-label">Today</span>
-      <span class="topbar-today-arrow">›</span>
-    </div>
   </div>
   <div class="dash-body" id="dash-body"></div>
   <nav class="bottom-nav">
@@ -1366,7 +1355,7 @@ function buildDash(){
   const label=arcLabel(score);
   const streak=getStreak(checkins);
   const weekCheckins=checkins.filter(c=>{const d=new Date(c.date),today=new Date();today.setHours(0,0,0,0);const diff=(today-d)/86400000;return diff<7;}).length;
-  document.getElementById('streak-ct').textContent=streak;
+  const _sc=document.getElementById('streak-ct'); if(_sc) _sc.textContent=streak;
 
   const dayNum=checkins.length+1;
   const name = (profile && profile.name && profile.name !== 'you') ? profile.name : 'Cons';
