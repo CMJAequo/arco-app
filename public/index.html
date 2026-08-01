@@ -1429,6 +1429,18 @@ function wakeRegularityCard(){
   const yLo = y(lo), yHi = y(hi);
   const todayIdx = (new Date().getDay() + 6) % 7;
 
+  // The earlier time is always labelled above its line and the later one below, so the two
+  // labels sit outside the band and cannot collide — including the uncommon case of waking
+  // earlier on free days, where anchoring by work/free instead would put both inside it.
+  const WORK = {txt: `${fmt(wd)} work`, colour: 'rgba(150,110,30,1)'};
+  const FREE = {txt: `${fmt(free)} free`, colour: 'rgba(26,22,18,0.6)'};
+  const above = wd <= free ? WORK : FREE, below = wd <= free ? FREE : WORK;
+  // Offset from the line, plus the label's own line-height. A dot is 9px wide with a 3px
+  // card-coloured ring, so under 11px the lower label touches the last dot's halo.
+  const GAP = 11, LBL = GAP + 13.5;
+  const mTop = Math.max(4, Math.ceil(LBL - yLo));     // only reserve space when a line sits
+  const mBot = Math.max(4, Math.ceil(yHi + LBL - H)); // near the edge; tight when centred
+
   // The two wake times as reference lines, with the gap between them shaded. The band
   // IS the story: its height is how much the wake time moves.
   const band = spread > 0.01 ? `<div style="position:absolute;left:0;right:0;top:${yLo}px;height:${yHi-yLo}px;background:rgba(214,158,52,0.16);"></div>` : '';
@@ -1445,17 +1457,17 @@ function wakeRegularityCard(){
 
   return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
     ${cardHead('wake time', 'the one number this app cares about most. no score, just where your mornings sit.')}
-    <div style="position:relative;height:${H}px;margin:2px 0 4px;">
-      <div style="position:absolute;left:0;right:82px;top:0;bottom:0;">
+    <div style="position:relative;height:${H}px;margin:${mTop}px 0 ${mBot}px;">
+      <div style="position:absolute;left:0;right:0;top:0;bottom:0;">
         ${band}
         ${line(y(wd), 'rgba(214,158,52,1)', 'solid')}
         ${line(y(free), 'rgba(26,22,18,0.55)', 'dashed')}
         ${dots}
       </div>
-      <div style="position:absolute;right:0;width:80px;top:${y(wd)}px;transform:translateY(-50%);font-size:10px;font-weight:600;color:rgba(150,110,30,1);">${fmt(wd)} work</div>
-      <div style="position:absolute;right:0;width:80px;top:${y(free)}px;transform:translateY(-50%);font-size:10px;font-weight:600;color:rgba(26,22,18,0.6);">${fmt(free)} free</div>
+      <div style="position:absolute;right:0;top:${yLo}px;transform:translateY(-100%);margin-top:-${GAP}px;font-size:10px;font-weight:600;color:${above.colour};white-space:nowrap;">${above.txt}</div>
+      <div style="position:absolute;right:0;top:${yHi}px;margin-top:${GAP}px;font-size:10px;font-weight:600;color:${below.colour};white-space:nowrap;">${below.txt}</div>
     </div>
-    <div style="display:flex;margin-right:82px;">${labels}</div>
+    <div style="display:flex;">${labels}</div>
     <div style="font-size:13px;color:var(--ink);line-height:1.5;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
   </div>`;
 }
