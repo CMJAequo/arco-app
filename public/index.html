@@ -2381,7 +2381,7 @@ const RULES = [
     effect: '400mg taken six hours before bed cut objectively measured total sleep by more than an hour',
     contradiction:
       'Your last caffeine is about {gap} before bed, inside the window where it ' +
-      'still costs you sleep.',
+      'tends to cost sleep.',
     mechanism:
       'Caffeine blocks adenosine, the molecule that builds sleep pressure across ' +
       'the day. Clearance varies two to three fold by CYP1A2 genotype, and oral ' +
@@ -2411,8 +2411,8 @@ const RULES = [
     fires: (p) => p.alcoholTiming === 'late',
     effect: 'about two drinks measurably cut REM; each additional 1 g/kg delayed REM onset by roughly 30 min and cut REM duration by roughly 40 min',
     contradiction:
-      'You tend to drink later in the evening, which takes the second half of the ' +
-      'night apart.',
+      'You tend to drink later in the evening, which tends to disturb the second ' +
+      'half of the night.',
     mechanism:
       'Alcohol is sedating early and disruptive late. As it clears, it suppresses ' +
       'and delays REM and fragments the back half of the night, which is why a ' +
@@ -2465,7 +2465,7 @@ const RULES = [
     effect: 'sleep onset latency reduced by about 36%',
     contradiction:
       'You take about {lat} minutes to fall asleep, and a warm bath ninety minutes ' +
-      'before bed is the best-evidenced fix you are probably not using.',
+      'before bed is the best-evidenced fix for that.',
     mechanism:
       'Warming the skin causes peripheral vasodilation, which accelerates the core ' +
       'temperature drop that gates sleep onset. The delay is the point: the effect ' +
@@ -2490,8 +2490,8 @@ const RULES = [
     fires: (p) => p.nightWakings >= 2,
     effect: 'heat fragments sleep and reduces deep and REM; cooler rooms support the core temperature drop',
     contradiction:
-      'You wake {n} times most nights, and room temperature tends to be the easiest ' +
-      'cause of that to fix.',
+      'You wake {n} times most nights, and room temperature is one of the most ' +
+      'common causes worth ruling out.',
     mechanism:
       'Sleep onset and maintenance depend on core temperature falling. A room that ' +
       'is too warm works against that all night, and tends to show up as waking ' +
@@ -2593,7 +2593,7 @@ const RULES = [
     fires: (p) => p.nicotine === true,
     effect: 'stimulant effect plus overnight withdrawal awakenings; associated with longer onset and more fragmentation',
     contradiction:
-      'Nicotine is a stimulant, and the withdrawal across the night is its own ' +
+      'Nicotine is a stimulant, and the withdrawal across the night can be its own ' +
       'source of waking.',
     mechanism:
       'It raises arousal directly, then levels fall overnight far enough to cause ' +
@@ -2615,7 +2615,8 @@ const RULES = [
     fires: (p) => hoursUntil(p.eatingWindowEnd, p.bedTime) < 2,
     effect: 'modest: later and larger meals are associated with longer onset and more fragmentation',
     contradiction:
-      'You tend to finish eating close to bed, which has a real but modest effect.',
+      'You tend to finish eating close to bed, which tends to have a real but ' +
+      'modest effect.',
     mechanism:
       'Digestion raises core temperature and metabolic rate at the point where both ' +
       'need to fall for sleep onset.',
@@ -2712,8 +2713,8 @@ const RULES = [
     fires: (p) => has(p.currentStack, 'melatonin'),
     effect: 'sleep onset latency reduced 7.06 min, total sleep +8.25 min',
     contradiction:
-      'Melatonin shifts when you sleep far more than it deepens it, which makes it ' +
-      'a chronobiotic rather than a sleeping pill.',
+      'Melatonin tends to shift when you sleep far more than it deepens it, which ' +
+      'makes it a chronobiotic rather than a sleeping pill.',
     mechanism:
       'It signals biological night, so it is genuinely useful for circadian problems ' +
       'such as jet lag or a delayed phase, when it is taken at the right time. Taken ' +
