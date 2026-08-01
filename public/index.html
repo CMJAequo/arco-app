@@ -924,11 +924,8 @@ function buildDash(){
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
 
   document.getElementById('dash-body').innerHTML=`
-    ${sleepStateCard()}
-
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
-      ${cardHead('your day and night', 'where daylight falls against when you sleep.')}
       <div class="arc-ring-wrap" style="position:relative;">
         <canvas id="main-clock" width="680" height="680" style="display:block;width:290px;height:290px;"></canvas>
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
@@ -942,6 +939,8 @@ function buildDash(){
         <span style="display:flex;align-items:center;gap:5px;">☀ ☾ sunrise, sunset</span>
       </div>
     </div>
+
+    ${sleepStateCard()}
 
     ${wakeRegularityCard()}
 
