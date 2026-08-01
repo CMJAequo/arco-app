@@ -1968,9 +1968,28 @@ function contradictionInner(r){
     <div style="font-size:13px;font-weight:500;color:var(--ink);line-height:1.55;margin-bottom:10px;">${r.contradiction}</div>
     <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">${r.mechanism}</div>
     ${r.effect?`<div style="font-size:11px;color:rgba(26,22,18,0.6);line-height:1.5;background:rgba(26,22,18,0.05);border-radius:8px;padding:9px 11px;margin-bottom:14px;"><span style="text-transform:uppercase;letter-spacing:0.06em;font-size:9px;color:var(--muted);">measured effect</span><br>${r.effect}</div>`:''}
-    <div style="display:flex;flex-direction:column;gap:9px;">
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:2px;">
       ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.7);line-height:1.55;">${f.action}</span></div>`).join('')}
     </div>`;
+}
+
+// Lever adoption: the user says they have started doing something, and the app tracks
+// how long for. Duration, not a streak: nothing breaks and nothing resets to zero.
+window.adoptLever = function(id){
+  profile.adopted = profile.adopted || {};
+  if(!profile.adopted[id]) profile.adopted[id] = { since: new Date().toISOString().slice(0,10) };
+  try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote(); saveCheckinRemote('adopted:' + id, 'started');
+  buildDash();
+};
+window.dropLever = function(id){
+  if(profile.adopted) delete profile.adopted[id];
+  try{ localStorage.setItem('arco-profile', JSON.stringify(profile)); }catch(e){}
+  saveProfileRemote(); showProgressTab();
+};
+function adoptedDays(id){
+  const a = (profile.adopted||{})[id]; if(!a) return null;
+  return Math.max(0, Math.round((new Date() - new Date(a.since)) / 86400000));
 }
 
 // One contradiction on the Today tab, rotating daily. Shown ids tracked in localStorage.
@@ -2317,7 +2336,14 @@ function dailyContradictionCard(){
     try{ localStorage.setItem('arco-contradictions-shown', JSON.stringify(shown)); }catch(e){}
     try{ localStorage.setItem('arco-contradiction-today', JSON.stringify({date:today, id:pick.id})); }catch(e){}
   }
-  return `<div style="background:var(--card);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;">${contradictionInner(pick)}</div>`;
+  // Prefer a lever they have not already taken on.
+  const notAdopted = fired.filter(r => !((profile.adopted||{})[r.id]));
+  if(notAdopted.length && (profile.adopted||{})[pick.id]) pick = notAdopted[0];
+  const days = adoptedDays(pick.id);
+  const action = days == null
+    ? `<div onclick="adoptLever('${pick.id}')" style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--sep);font-size:12px;font-weight:500;color:var(--orange);cursor:pointer;">I have started doing this →</div>`
+    : `<div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--sep);font-size:12px;color:var(--muted);">you started this ${days === 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'}</div>`;
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px;">${contradictionInner(pick)}${action}</div>`;
 }
 
 // Seven-day outdoor/training plan from the live forecast. Days 1-3 stated plainly,
@@ -2402,6 +2428,14 @@ window.submitCheckin = function(){
     try{ localStorage.setItem('arco-checkins',JSON.stringify(checkins)); }catch(e){}
   }
   saveCheckinRemote(q.field, String(currentQAnswer));
+  // Log the current wake-time spread so Progress can show real history rather than a guess.
+  try{
+    const wd = profile.wakeTime ?? profile.wake, fr = profile.weekendWakeTime;
+    if(wd != null && fr != null && !checkins.find(c=>c.date===today && c.key==='wakeSpread')){
+      checkins.push({ date: today, key:'wakeSpread', value: String(Math.abs(circDiff(fr, wd)).toFixed(2)) });
+      try{ localStorage.setItem('arco-checkins', JSON.stringify(checkins)); }catch(e){}
+    }
+  }catch(e){}
   // Immediate payout: if that answer unlocked a new contradiction, show it right now.
   let after=[]; try{ after = runContradictions(toContradictionProfile(profile)).fired; }catch(e){}
   const unlocked = after.find(r => !before.includes(r.id));
@@ -3629,109 +3663,69 @@ function dayStructureSection(){
 }
 
 function showProgressTab(){
-  const now=new Date();
-  const totalDays = Math.max(checkins.length, 1);
-  const sups = profile.supplements || [];
+  // No score, no streak, no grade, and no simulated data. Two honest things: how the
+  // wake-time spread has moved, and which levers have been taken on and for how long.
+  const spreads = checkins.filter(c=>c.key==='wakeSpread')
+    .map(c=>({ date:c.date, v:parseFloat(c.value) })).filter(x=>!isNaN(x.v)).slice(-14);
+  const fmtSpread = v => { const h=Math.floor(v), m=Math.round((v-h)*60);
+    return v < 0.25 ? 'steady' : (h>0 ? (m>0?`${h}h ${m}m`:`${h}h`) : `${m}m`); };
 
-  // Adherence — how many days each supplement was taken
-  const weekDates = [];
-  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);weekDates.push(d.toDateString());}
-
-  // Build 7-day adherence grid
-  const adherenceGrid = sups.map(key => {
-    const s = supView(key); if(!s) return '';
-    const taken = takenToday.includes(key);
-    // For demo, simulate some historical data
-    const dots = weekDates.map((date,i) => {
-      const isToday = date === new Date().toDateString();
-      const wasTaken = isToday ? taken : checkins.some(c=>c.date===date) && Math.random()>0.3;
-      const col = wasTaken ? '#4BB87B' : isToday&&!taken ? 'rgba(232,82,10,0.3)' : 'rgba(26,22,18,0.1)';
-      return `<div style="width:28px;height:28px;border-radius:50%;background:${col};flex-shrink:0;"></div>`;
+  let variance;
+  if(spreads.length < 2){
+    variance = `<div style="font-size:13px;color:var(--muted);line-height:1.6;">Not enough logged yet. Check in over a few days and the shape of your wake time will build up here.</div>`;
+  } else {
+    const vals = spreads.map(x=>x.v), hi = Math.max(...vals, 1);
+    const bars = spreads.map(x=>{
+      const pct = Math.max(6, (x.v / hi) * 100);
+      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:72px;">
+        <div style="width:100%;height:${pct.toFixed(0)}%;background:${x.v < 1 ? 'rgba(214,158,52,0.95)' : 'rgba(26,22,18,0.30)'};border-radius:3px 3px 0 0;"></div>
+      </div>`;
     }).join('');
-    return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid var(--sep);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:13px;font-weight:500;color:var(--ink);">${s.name}</div>
-        <div style="font-size:10px;color:var(--muted);">${s.anytime?'any':fmt(s.window[0])}</div>
+    const first = spreads[0].v, last = spreads[spreads.length-1].v;
+    const dir = Math.abs(last-first) < 0.25 ? 'It has held about steady.'
+      : last < first ? 'It has been tightening, which is the direction that matters.'
+      : 'It has been widening. Pulling the free-day end back is the lever.';
+    variance = `<div style="display:flex;gap:3px;align-items:flex-end;">${bars}</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;">
+        <span>${fmtSpread(first)}</span><span>now ${fmtSpread(last)}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;">${dots}</div>
-    </div>`;
-  }).join('');
+      <div style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.55;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${dir}</div>`;
+  }
 
-  // Streak
-  const streak = Math.max(getStreak(checkins),1);
-  const weekCheckins = checkins.filter(c=>{const d=new Date(c.date),t=new Date();t.setHours(0,0,0,0);return(t-d)/86400000<7;}).length;
-
-  // Check-in history chart — last 7 days as bars
-  const barWidth = 28;
-  const bars = weekDates.map((date,i)=>{
-    const hasCI = checkins.some(c=>c.date===date);
-    const isToday = date===new Date().toDateString();
-    const h = hasCI ? (60 + Math.random()*20) : 10;
-    const col = isToday ? 'var(--orange)' : hasCI ? 'var(--ink)' : 'rgba(26,22,18,0.08)';
-    const days=['M','T','W','T','F','S','S'];
-    const dIdx=(new Date(date).getDay()+6)%7;
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-      <div style="width:${barWidth}px;height:80px;display:flex;align-items:flex-end;">
-        <div style="width:100%;height:${h}px;background:${col};border-radius:4px 4px 0 0;transition:height 0.3s;"></div>
+  const adopted = Object.keys(profile.adopted || {});
+  const leverRows = adopted.length ? adopted.map(id=>{
+    const r = RULES.find(x=>x.id===id), d = adoptedDays(id);
+    const name = r ? (WINDOW_NAME[id] || id.replace(/-/g,' ')) : id.replace(/-/g,' ');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:0.5px solid var(--sep);">
+      <div style="min-width:0;">
+        <div style="font-size:13px;color:var(--ink);">${name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${d === 0 ? 'started today' : d === 1 ? '1 day' : d + ' days'}${r&&r.evidence?' · '+evidenceGrade(r.evidence).label:''}</div>
       </div>
-      <div style="font-size:9px;color:${isToday?'var(--orange)':'var(--muted)'};">${days[dIdx]}</div>
+      <span onclick="dropLever('${id}')" style="font-size:11px;color:var(--muted);cursor:pointer;flex-shrink:0;">stop</span>
     </div>`;
-  }).join('');
+  }).join('') : `<div style="font-size:13px;color:var(--muted);line-height:1.6;padding:2px 0 6px;">Nothing taken on yet. When a lever on Today looks worth trying, mark it and it will show up here.</div>`;
 
   document.getElementById('dash-body').innerHTML=`
     <div style="padding:4px 0 16px;">
       <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">progress</div>
-      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">day ${totalDays}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">consistency compounds. the data gets more useful every week.</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">consistency, not scores</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">There is nothing here to win or lose. Two things worth watching: whether your wake time is settling, and what you have changed.</div>
     </div>
 
-    <div class="week-section-label" style="margin-top:4px;">check-in history</div>
-    <div style="background:var(--card);border-radius:var(--radius);padding:14px 12px 10px;margin-bottom:12px;">
-      ${buildWeekRow()}
+    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">wake-time spread</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">how far your wake time moves across the week, over time.</div>
+      ${variance}
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
-      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
-        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">streak</div>
-        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${streak}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;">days</div>
-      </div>
-      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
-        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">this week</div>
-        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${weekCheckins}/7</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;">check-ins</div>
-      </div>
-      <div style="background:var(--card);border-radius:12px;padding:12px 14px;">
-        <div style="font-size:9px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:5px;">protocol</div>
-        <div style="font-size:24px;font-weight:500;color:var(--ink);line-height:1;">${sups.length}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;">compounds</div>
-      </div>
+    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">levers you have taken on</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;">how long, not how well. Missing a day does not reset anything.</div>
+      ${leverRows}
     </div>
-
-    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;">check-in history</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;">${bars}</div>
-    </div>
-
-    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">supplement adherence</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">last 7 days</div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-        ${weekDates.map((_,i)=>{const days=['M','T','W','T','F','S','S'];const d=new Date();d.setDate(d.getDate()-(6-i));const dIdx=(d.getDay()+6)%7;const isToday=d.toDateString()===new Date().toDateString();return`<div style="width:28px;text-align:center;font-size:9px;color:${isToday?'var(--orange)':'var(--muted)'};">${days[dIdx]}</div>`;}).join('')}
-      </div>
-      ${adherenceGrid}
-    </div>
-
-    <div style="background:var(--card-peach);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;border-left:3px solid var(--orange);">
-      <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;font-weight:500;">pattern insight</div>
-      <div style="font-size:13px;color:var(--ink);line-height:1.6;">Keep logging daily. After 7 days Arco will identify patterns in your energy, sleep and compliance, and tell you something about yourself you didn't already know.</div>
-    </div>
-
     <div style="height:20px;"></div>
   `;
 }
-
-
 function drawCurve(h){
   const canvas=document.getElementById('main-curve');if(!canvas)return;
   const w=canvas.width,ch=canvas.height,ctx=canvas.getContext('2d');
