@@ -1574,14 +1574,14 @@ function drawClock(h){
       ctx.moveTo(cx+ca*rIn, cy+sa*rIn);ctx.lineTo(cx+ca*rOut, cy+sa*rOut);
       ctx.strokeStyle='rgba(237,233,225,0.9)';ctx.lineWidth=1.5*dpr;ctx.stroke();
       // time
-      const tR=r+SW/2 + 13*dpr;
+      const tR=r+SW/2 + 19*dpr;   // centred between the ring edge and the glyph
       ctx.font=`600 ${8.5*dpr}px Switzer,sans-serif`;
       ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(fmt(hh), cx+ca*tR, cy+sa*tR);
       // Legible glyphs: a rayed sun at sunrise, a crescent moon at sunset. Sit them
       // clear of the time label (its horizontal width reaches furthest near 3 o'clock).
-      const iR=r+SW/2 + 42*dpr, ix=cx+ca*iR, iy=cy+sa*iR;
+      const iR=r+SW/2 + 46*dpr, ix=cx+ca*iR, iy=cy+sa*iR;
       ctx.strokeStyle='rgba(26,22,18,0.55)';ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.lineWidth=1.2*dpr;ctx.lineCap='round';
       if(rising){
