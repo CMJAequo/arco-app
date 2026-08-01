@@ -937,6 +937,9 @@ function buildDash(){
         <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${rgbTone('night')};"></span>asleep</span>
         <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:2px;background:rgba(232,82,10,0.95);"></span>now</span>
         <span style="display:flex;align-items:center;gap:5px;">☀ ☾ sunrise, sunset</span>
+        ${hasSleepTrack() ? `
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:6px;border-radius:3px;background:rgba(${TRACK_TONE.bio},${TRACK_ALPHA.bio});"></span>body clock</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:12px;height:3px;border-radius:2px;background:rgba(${TRACK_TONE.actual},${TRACK_ALPHA.actual});"></span>your sleep</span>` : ''}
       </div>
     </div>
 
@@ -1024,15 +1027,14 @@ function drawClock(h){
   const hasSun = typeof profile.sunriseToday==='number' && typeof profile.sunsetToday==='number';
   const SR = profile.sunriseToday, SS = profile.sunsetToday;
 
-  // Ring and day strip share ONE palette and ONE set of phase divisions (DAY_TONE /
-  // phaseToneAt), so the circle and the bar read as the same system. The circle adds
-  // daylight markers and supplement dots; the bar carries the phase detail.
+  // The ring carries exactly two states, awake and asleep, and nothing else. It used to
+  // dim the last 30 minutes before bed to a third grey tone for the wind-down window,
+  // but half an hour of a 24-hour ring cannot earn a tone the legend has to explain,
+  // and the sleep state card already names the wind-down in words.
   const wakeR = profile.wakeTime ?? profile.wake ?? 7, bedR = bedLinear(profile);
-  let _bn = {}; try{ getDayWindows(profile).forEach(w => _bn[w.name] = w); }catch(e){}
   function ringColor(hr){
     const hl = hr < wakeR ? hr + 24 : hr;                 // linear wake..bed line
-    if(hl < wakeR || hl >= bedR) return DAY_TONE.night;   // asleep: deep brown
-    return DAY_TONE[phaseToneAt(hl, _bn)];
+    return (hl < wakeR || hl >= bedR) ? DAY_TONE.night : DAY_TONE.sharp;
   }
 
   // Draw ring as tiny arc segments
@@ -1096,19 +1098,30 @@ function drawClock(h){
       const trackR = inner + (r - SW/2 - inner) * 0.78;
       const angc = hh => (hh/24)*Math.PI*2 - Math.PI/2;
       const smooth = k => { k=Math.max(0,Math.min(1,k)); return k*k*(3-2*k); };
+      // The band is ONE uniform stroke for its core plus short stepped tails that fade
+      // out at each end. It was previously ~100 segments each overlapping the next by
+      // 0.008 rad; because the segments are stroked at partial alpha, every overlap
+      // double-composited (0.22 became 0.39) and the band read as hatched rather than
+      // solid. Never draw an alpha stroke over another alpha stroke of the same band.
       const arcBand = (hA, hB, width, rgb, peak, fade) => {
         const dur = hoursUntil(hA, hB); if(dur<=0) return;
-        const N = Math.max(6, Math.round(dur/0.08));
+        const f = Math.min(fade, dur/2);
+        ctx.lineWidth = width; ctx.lineCap = 'butt';
+        if(dur > f*2){                                    // core: single seam-free stroke
+          ctx.beginPath();ctx.arc(cx,cy,trackR, angc(hA+f), angc(hA+dur-f));
+          ctx.strokeStyle=`rgba(${rgb},${peak})`;ctx.stroke();
+        }
+        const N = 14;                                     // tails: butted edge to edge, never overlapping
         for(let i=0;i<N;i++){
-          const f0=i/N, f1=(i+1)/N, off=dur*((f0+f1)/2);
-          const al = peak * smooth(Math.min(off, dur-off)/fade);
+          const t0=i/N, t1=(i+1)/N, al = peak * smooth((t0+t1)/2);
           if(al<=0.002) continue;
-          ctx.beginPath();ctx.arc(cx,cy,trackR, angc(hA+dur*f0)-0.004, angc(hA+dur*f1)+0.004);
-          ctx.strokeStyle=`rgba(${rgb},${al})`;ctx.lineWidth=width;ctx.lineCap='butt';ctx.stroke();
+          ctx.strokeStyle=`rgba(${rgb},${al})`;
+          ctx.beginPath();ctx.arc(cx,cy,trackR, angc(hA+f*t0),       angc(hA+f*t1));       ctx.stroke();
+          ctx.beginPath();ctx.arc(cx,cy,trackR, angc(hA+dur-f*t1),   angc(hA+dur-f*t0));   ctx.stroke();
         }
       };
-      arcBand(ct.bioBedTime, ct.bioWakeTime, 6*dpr,   '48,52,66', 0.22, 0.75);   // biological: soft, wide
-      arcBand(ct.bedTime,    ct.wakeTime,    3.5*dpr, '26,22,18', 0.60, 0.20);   // actual: crisp, higher contrast
+      arcBand(ct.bioBedTime, ct.bioWakeTime, 6*dpr,   TRACK_TONE.bio,    TRACK_ALPHA.bio,    0.75);
+      arcBand(ct.bedTime,    ct.wakeTime,    3.5*dpr, TRACK_TONE.actual, TRACK_ALPHA.actual, 0.20);
     }
   }
 
@@ -1257,19 +1270,22 @@ function derivedSleepQuality(p){
 }
 
 // ── SHARED DAY PALETTE ───────────────────────────────────────────────────────
-// One palette and one set of phase divisions for BOTH the clock ring and the day
-// strip, so the circle and the bar are the same system in two shapes.
+// Two tones only. Every colour on the ring has a legend entry, and every legend
+// entry is a colour on the ring. Nothing goes in here without earning that pair.
 const DAY_TONE = {
-  sharp:   [214, 158,  52],   // deep work / second window — gold
-  neutral: [203, 181, 138],   // steady stretches — muted gold
-  dull:    [158, 152, 142],   // inertia / trough / wind-down — warm grey, the valley
-  night:   [ 40,  27,  15]    // asleep — very dark brown
+  sharp: [214, 158,  52],   // awake — gold
+  night: [ 40,  27,  15]    // asleep — very dark brown
 };
 const rgbTone = t => `rgb(${DAY_TONE[t][0]},${DAY_TONE[t][1]},${DAY_TONE[t][2]})`;
-// Which tone covers a given linear-day hour. bn = getDayWindows keyed by name.
-function phaseToneAt(hl, bn){
-  const on = w => w && hl >= w.start && hl < w.end;
-  return on(bn.windDown) ? 'dull' : 'sharp';   // awake is gold, the wind-down dims into night
+// The inner sleep track, drawn under the ring: a soft wide band for the body-clock
+// estimate and a thin crisp one for actual sleep. Legend swatches must stay in sync.
+const TRACK_TONE = { bio: '48,52,66', actual: '26,22,18' };
+const TRACK_ALPHA = { bio: 0.30, actual: 0.60 };
+// computeChronotype returns null when the free-day sleep fields are missing, and the
+// track is then not drawn at all. The legend has to ask the same question the canvas
+// does, or it will name two bands that are not on screen.
+function hasSleepTrack(p){
+  try{ return !!computeChronotype(p || profile); }catch(e){ return false; }
 }
 
 function fmt(n){const hh=Math.floor(n%24),mm=Math.round((n%1)*60);return hh.toString().padStart(2,'0')+':'+(mm<10?'0'+mm:mm);}
