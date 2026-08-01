@@ -1382,6 +1382,7 @@ function buildDash(){
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
       </div>
+      ${currentPhaseNote()}
     </div>
 
     ${dayStripCard()}
@@ -1421,7 +1422,7 @@ function drawClock(h){
   const canvas=document.getElementById('main-clock');if(!canvas)return;
   const ctx=canvas.getContext('2d');
   const dpr=2;
-  const cx=170*dpr,cy=170*dpr,r=104*dpr,inner=63*dpr,SW=26*dpr;
+  const cx=170*dpr,cy=170*dpr,r=98*dpr,inner=59*dpr,SW=26*dpr;
   ctx.clearRect(0,0,680,680);
 
   const wake=profile.wake??7;
@@ -1561,14 +1562,14 @@ function drawClock(h){
       ctx.moveTo(cx+ca*rIn, cy+sa*rIn);ctx.lineTo(cx+ca*rOut, cy+sa*rOut);
       ctx.strokeStyle='rgba(237,233,225,0.9)';ctx.lineWidth=1.5*dpr;ctx.stroke();
       // time
-      const tR=r+SW/2 + 11*dpr;
+      const tR=r+SW/2 + 13*dpr;
       ctx.font=`600 ${8.5*dpr}px Switzer,sans-serif`;
       ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(fmt(hh), cx+ca*tR, cy+sa*tR);
       // Legible glyphs: a rayed sun at sunrise, a crescent moon at sunset. Sit them
       // clear of the time label (its horizontal width reaches furthest near 3 o'clock).
-      const iR=r+SW/2 + 34*dpr, ix=cx+ca*iR, iy=cy+sa*iR;
+      const iR=r+SW/2 + 42*dpr, ix=cx+ca*iR, iy=cy+sa*iR;
       ctx.strokeStyle='rgba(26,22,18,0.55)';ctx.fillStyle='rgba(26,22,18,0.55)';
       ctx.lineWidth=1.2*dpr;ctx.lineCap='round';
       if(rising){
@@ -1961,6 +1962,24 @@ const WINDOW_SHORT = {
   postTraining:'Refuel. Protein-forward rather than a second dinner.',
   sleep:'Asleep, or heading there. Nothing to act on.'
 };
+// Current-phase note: name, range and a one-liner. Lives in the clock card, filling the
+// space the supplement dots used to occupy.
+function currentPhaseNote(){
+  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
+  let ph; try{ ph = getCurrentPhase(h, profile); }catch(e){ return ''; }
+  if(!ph) return '';
+  const isSup = ph.key === 'supplement';
+  const nm = isSup ? (SHORT_NAME[ph.sup.key]||ph.sup.name) : (WINDOW_NAME[ph.key]||ph.key);
+  const note = isSup ? `Take ${ph.sup.dose} now.` : (WINDOW_SHORT[ph.key] || '');
+  const range = ph.key === 'sleep' ? '' : `${fmt(ph.start)}–${fmt(ph.end)}`;
+  return `<div onclick="openWindowPopup('${isSup?'neutral':ph.key}',${+ph.start.toFixed(3)},${+ph.end.toFixed(3)})" style="background:rgba(26,22,18,0.05);border-radius:14px;padding:13px 15px;margin-top:4px;cursor:pointer;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px;">
+      <span style="font-size:10px;font-weight:600;color:var(--orange);letter-spacing:0.07em;text-transform:uppercase;">now · ${nm}</span>
+      ${range?`<span style="font-size:10px;color:var(--muted);flex-shrink:0;">${range}</span>`:''}
+    </div>
+    <div style="font-size:13px;color:rgba(26,22,18,0.72);line-height:1.55;">${note}</div>
+  </div>`;
+}
 window.openWindowPopup = function(name, start, end){
   const line = name === 'dipWalk' ? dipWalkLine(profile)
     : name === 'morningLight' ? morningLightLine(profile) : WINDOW_LINE[name]; if(!line) return;
@@ -2108,25 +2127,12 @@ function dayStripCard(){
     ? `<div style="position:absolute;top:16px;bottom:0;left:${pct(h)}%;width:1.5px;background:rgba(232,82,10,0.95);z-index:3;pointer-events:none;"></div>` : '';
   // The one label: the current phase, at the now-line. Everything else stays unlabelled.
   // The same phase also gets a short note under the bar, so the encoding pays out in words.
-  let labelHtml = '', phaseNoteHtml = '';
+  let labelHtml = '';
   const phNow = getCurrentPhase(h, p);
   if(inDay && phNow){
     const nm = phNow.key === 'supplement' ? (SHORT_NAME[phNow.sup.key]||phNow.sup.name) : (WINDOW_NAME[phNow.key]||phNow.key);
     const lx = Math.max(9, Math.min(91, pct(h)));
     labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
-  }
-  if(phNow){
-    const isSup = phNow.key === 'supplement';
-    const nm = isSup ? (SHORT_NAME[phNow.sup.key]||phNow.sup.name) : (WINDOW_NAME[phNow.key]||phNow.key);
-    const note = isSup ? `Take ${phNow.sup.dose} now.` : (WINDOW_SHORT[phNow.key] || '');
-    const range = phNow.key === 'sleep' ? '' : `${fmt(phNow.start)}–${fmt(phNow.end)}`;
-    phaseNoteHtml = `<div onclick="openWindowPopup('${isSup?'neutral':phNow.key}',${+phNow.start.toFixed(3)},${+phNow.end.toFixed(3)})" style="margin-top:14px;background:rgba(26,22,18,0.05);border-radius:12px;padding:11px 13px;cursor:pointer;">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:3px;">
-        <span style="font-size:10px;font-weight:600;color:var(--orange);letter-spacing:0.07em;text-transform:uppercase;">now · ${nm}</span>
-        ${range?`<span style="font-size:10px;color:var(--muted);flex-shrink:0;">${range}</span>`:''}
-      </div>
-      <div style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.5;">${note}</div>
-    </div>`;
   }
   // Card wrapper: title above, then label row / strip / physicalPeak line, with a short
   // legend so the encoding does not have to be guessed. now-line spans strip+peak.
@@ -2139,7 +2145,6 @@ function dayStripCard(){
       <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
       ${nowHtml}
     </div>
-    ${phaseNoteHtml}
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:10px;color:var(--muted);">
       <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.sharp};"></span>steady</span>
       <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.dull};"></span>low points</span>
