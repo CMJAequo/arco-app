@@ -1439,6 +1439,8 @@ function buildDash(){
   const greeting=hr<12?'morning':hr<17?'afternoon':'evening';
 
   document.getElementById('dash-body').innerHTML=`
+    ${sleepStateCard()}
+
     <div class="arc-card">
       <div class="arc-label">${hr<12?'Good morning':(hr<17?'Good afternoon':'Good evening')}, ${name}</div>
       <div class="arc-ring-wrap" style="position:relative;">
@@ -1447,18 +1449,13 @@ function buildDash(){
           <div style="font-size:32px;font-weight:300;color:var(--ink);letter-spacing:-0.03em;line-height:1;">${fmtTime(now)}</div>
         </div>
       </div>
-      ${currentPhaseNote()}
     </div>
 
-    ${dayStripCard()}
-
-    ${fridayCard()}
-
-    ${buildProtocolCard(h, profile)}
+    ${wakeRegularityCard()}
 
     ${dailyContradictionCard()}
 
-    ${weekPlanCard()}
+    ${buildProtocolCard(h, profile)}
 
     <div class="checkin-card" onclick="openCheckin()">
       <div class="checkin-card-left">
@@ -1965,11 +1962,12 @@ function contradictionInner(r){
   const fixes=[...r.fixes].sort((a,b)=>{const av=a.cost==='free'?-1:a.cost,bv=b.cost==='free'?-1:b.cost;return av-bv;});
   return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
-      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">the contradiction</div>
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;">the lever</div>
       <span style="font-size:9px;font-weight:${g.weight};color:${g.color};border:0.5px ${g.border} ${g.color};border-radius:4px;padding:1px 5px;letter-spacing:0.05em;flex-shrink:0;">${g.label}</span>
     </div>
     <div style="font-size:13px;font-weight:500;color:var(--ink);line-height:1.55;margin-bottom:10px;">${r.contradiction}</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${r.mechanism}</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">${r.mechanism}</div>
+    ${r.effect?`<div style="font-size:11px;color:rgba(26,22,18,0.6);line-height:1.5;background:rgba(26,22,18,0.05);border-radius:8px;padding:9px 11px;margin-bottom:14px;"><span style="text-transform:uppercase;letter-spacing:0.06em;font-size:9px;color:var(--muted);">measured effect</span><br>${r.effect}</div>`:''}
     <div style="display:flex;flex-direction:column;gap:9px;">
       ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.7);line-height:1.55;">${f.action}</span></div>`).join('')}
     </div>`;
@@ -2018,6 +2016,101 @@ const WINDOW_SHORT = {
   postTraining:'Refuel. Protein-forward rather than a second dinner.',
   sleep:'Asleep, or heading there. Nothing to act on.'
 };
+// ── WAKE-TIME REGULARITY ─────────────────────────────────────────────────────
+// Seven bars showing wake time across the week, with the variance visible as shape.
+// Explicitly NOT a score: no number is graded, nothing can be failed. Built from the
+// user's stated weekday and free-day wake times, and labelled as such.
+function wakeRegularityCard(){
+  const p = profile, wd = p.wakeTime ?? p.wake, fr = p.weekendWakeTime;
+  if(wd == null) return '';
+  const free = (fr == null) ? wd : fr;
+  const DOW = ['M','T','W','T','F','S','S'];
+  const isFree = i => i >= 5;                       // Sat/Sun as the free days
+  const times = DOW.map((_, i) => isFree(i) ? free : wd);
+  const lo = Math.min(...times), hi = Math.max(...times);
+  const spread = hi - lo;
+  // Scale the plot to a 4h span around the times so a small drift is still visible.
+  const pad = Math.max(0.75, (4 - spread) / 2);
+  const top = lo - pad, bottom = hi + pad, range = bottom - top;
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  const bars = times.map((t, i) => {
+    const y = ((t - top) / range) * 100;            // % from the top of the plot
+    const isToday = i === todayIdx;
+    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;">
+      <div style="position:relative;width:100%;height:62px;">
+        <div style="position:absolute;left:50%;transform:translateX(-50%);top:${y.toFixed(1)}%;width:${isFree(i)?'13px':'11px'};height:${isFree(i)?'13px':'11px'};margin-top:-6px;border-radius:50%;background:${isFree(i)?'rgba(26,22,18,0.30)':'rgba(214,158,52,0.95)'};"></div>
+      </div>
+      <div style="font-size:9.5px;letter-spacing:0.05em;color:${isToday?'var(--ink)':'var(--muted)'};font-weight:${isToday?'700':'400'};">${DOW[i]}</div>
+    </div>`;
+  }).join('');
+  const h = Math.floor(spread), m = Math.round((spread - h) * 60);
+  const spreadTxt = spread < 0.25 ? 'within a few minutes'
+    : (h > 0 ? (m > 0 ? `by about ${h}h ${m}m` : `by about ${h} hours`) : `by about ${m} minutes`);
+  const note = spread < 1
+    ? `Your wake time holds ${spreadTxt} across the week. That consistency is the thing worth protecting.`
+    : `Your wake time moves ${spreadTxt} across the week. Pulling the free-day end closer to the weekday one is the highest-value change available to you.`;
+  return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">wake time</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px;">the shape of your week. no score, just where the mornings sit.</div>
+    <div style="display:flex;gap:3px;align-items:flex-start;">${bars}</div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;">
+      <span>${fmt(top)}</span><span>${fmt(bottom)}</span>
+    </div>
+    <div style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.55;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
+  </div>`;
+}
+
+// ── SLEEP STATE CARD ─────────────────────────────────────────────────────────
+// Always shows something: there is no hour of the day when nothing is true. Present
+// tense, plain language, and a countdown where the thing is time-limited. Never a
+// score, a grade or an assessment of last night.
+function _countdown(hoursLeft){
+  const m = Math.max(0, Math.round(hoursLeft * 60));
+  if(m >= 60){ const h = Math.floor(m/60), r = m%60; return r ? `${h}h ${r}m left` : `${h}h left`; }
+  return `${m}m left`;
+}
+function sleepStateCard(){
+  const p = profile, wake = p.wakeTime ?? p.wake, bed = p.bedTime ?? p.bed;
+  if(wake == null || bed == null) return '';
+  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
+  const hL = dayH(h, p), bedL = bedLinear(p);
+  const lightEnd = wake + 1, caffCut = bedL - 8, bathAt = bedL - 1.5, windAt = bedL - 0.5;
+
+  let label, line, foot = '', pct = null;
+  if(hL < wake){
+    label = 'still night';
+    line  = `Your wake time is ${fmt(wake)}. Holding it steady, even after a short night, is the single most useful thing you can do.`;
+  } else if(hL < lightEnd){
+    label = 'light window';
+    line  = 'Ten minutes outside in the next hour anchors your body clock for the day. Overcast counts.';
+    foot  = _countdown(lightEnd - hL); pct = ((hL - wake) / (lightEnd - wake)) * 100;
+  } else if(hL < caffCut){
+    label = 'caffeine window';
+    line  = `Last caffeine by ${fmt(caffCut)} to keep it clear of tonight. In the trial that measured this, people could not tell it was affecting them.`;
+    foot  = _countdown(caffCut - hL); pct = ((hL - lightEnd) / (caffCut - lightEnd)) * 100;
+  } else if(hL < bathAt){
+    label = 'caffeine cutoff passed';
+    line  = `Anything from here is likely to still be circulating at ${fmt(bedL)}. A warm bath or shower at ${fmt(bathAt)} is the next thing worth doing.`;
+  } else if(hL < windAt){
+    label = 'warm bath window';
+    line  = 'A warm bath or shower now, about ninety minutes before bed, cuts the time it takes to fall asleep. The delay is the point: it works through the cooling afterwards.';
+    foot  = _countdown(windAt - hL); pct = ((hL - bathAt) / (windAt - bathAt)) * 100;
+  } else if(hL < bedL){
+    label = 'wind-down';
+    line  = 'The last half hour: no work, no email, no markets. Anything else is fine. It is the arousal that keeps you up, not the screen light.';
+    foot  = _countdown(bedL - hL); pct = ((hL - windAt) / (bedL - windAt)) * 100;
+  } else {
+    label = 'past your bedtime';
+    line  = `Whatever time you get to sleep, waking at ${fmt(wake)} keeps the anchor in place. Take the extra sleep at the front of tomorrow night, not the back.`;
+  }
+  return `<div class="now-card" style="margin-bottom:12px;">
+    <div style="margin-bottom:7px;"><span class="now-window-label" style="margin-bottom:0;">now · ${label}</span></div>
+    <div class="now-window-desc" style="margin-bottom:${foot?'12px':'0'};">${line}</div>
+    ${pct!=null?`<div class="now-window-bar"><div class="now-window-fill" style="width:${Math.max(0,Math.min(100,pct))}%;"></div></div>`:''}
+    ${foot?`<div class="now-window-footer">${foot}</div>`:''}
+  </div>`;
+}
+
 // Current-phase note: name, range and a one-liner. Lives in the clock card, filling the
 // space the supplement dots used to occupy.
 function currentPhaseNote(){
@@ -2338,27 +2431,38 @@ function switchTab(tab,el){
   else if(tab==='progress') showProgressTab();
   else if(tab==='profile') showProfileTab();
   else if(tab==='learn'){
+    const DEBUNK = [
+      ['"Eight hours for everyone"','WEAK','The mortality nadir sits around seven hours and individual need genuinely varies. A fixed target turns a range into a thing to fail at.'],
+      ['Blue-light glasses','WEAK','A meta-analysis found sleep onset shortened by 4.86 minutes, not statistically significant, and no effect on sleep efficiency or waking in the night. The arousal from what you are doing matters more than the light.'],
+      ['Sleep hygiene on its own','WEAK','The weakest component of CBT-I, and the one most often sold as the whole thing. Useful alongside the rest, thin on its own.'],
+      ['Deep sleep scores','WEAK','Consumer devices cannot stage sleep accurately. A nightly deep-sleep figure is a confident number attached to a measurement the device cannot really make.'],
+      ['90-minute cycle timing','WEAK','Cycle length varies within a night and between people. Setting an alarm to a multiple of ninety minutes is arithmetic, not physiology.'],
+      ['"Hours before midnight count double"','WEAK','No evidence. Deep sleep is front-loaded in the night wherever that night starts.'],
+      ['Mouth taping','WEAK','Popular, poorly evidenced, and carries real risk if you have undiagnosed breathing problems at night.'],
+      ['Weighted blankets, white noise, magnesium sprays, sleepy teas','WEAK','Small studies, weak effects, and heavy marketing. Harmless if you enjoy them, but they are not doing the work.'],
+      ['Cognitive shuffling and the military method','WEAK','A conference poster and a 1981 coaching book respectively. Neither has the evidence base the internet implies.']
+    ];
     document.getElementById('dash-body').innerHTML=`
       <div style="padding:4px 0 16px;">
         <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">learn</div>
-        <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">coming soon</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">Evidence-based guides on timing, forms, and deficiency, written from the same database that powers your protocol.</div>
+        <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">things that do not work</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">Sleep advice is full of confident claims with nothing behind them. Knowing what to ignore is worth as much as knowing what to do.</div>
       </div>
-      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
-        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
-        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">Why form matters more than dose</div>
-        <div style="font-size:11px;color:var(--muted);">Magnesium oxide vs glycinate. The absorption gap nobody talks about.</div>
+      ${DEBUNK.map(([t,g,w])=>`<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;">
+          <div style="font-size:14px;font-weight:500;color:var(--ink);line-height:1.4;">${t}</div>
+          <span style="font-size:9px;font-weight:500;color:rgba(26,22,18,0.32);border:0.5px dashed rgba(26,22,18,0.32);border-radius:4px;padding:1px 5px;letter-spacing:0.05em;flex-shrink:0;">${g}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;">${w}</div>
+      </div>`).join('')}
+      <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">worth knowing</div>
+        <div style="font-size:13px;color:rgba(26,22,18,0.75);line-height:1.6;">People who sleep badly tend to underestimate how much they slept, by roughly 45 minutes on average. If last night felt worse than it was, that is common and it is not a personal failing.</div>
       </div>
-      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
-        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
-        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">The underdosing problem</div>
-        <div style="font-size:11px;color:var(--muted);">Most fish oil capsules contain 30% of the research dose. Here's what to look for.</div>
-      </div>
-      <div style="background:var(--card);border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;opacity:0.5;">
-        <div style="font-size:10px;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px;">coming</div>
-        <div style="font-size:14px;font-weight:500;color:var(--ink);margin-bottom:3px;">Cortisol and your day</div>
-        <div style="font-size:11px;color:var(--muted);">What actually happens in the first 90 minutes after waking.</div>
-      </div>
+      ${needsSignposting() ? `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;border:0.5px solid rgba(26,22,18,0.12);">
+        <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">worth a conversation</div>
+        <div style="font-size:13px;color:rgba(26,22,18,0.78);line-height:1.6;">${SIGNPOST_TEXT}</div>
+      </div>` : ''}
       <div style="height:20px;"></div>
     `;
   }
