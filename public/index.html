@@ -816,8 +816,9 @@ function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/
 const CITY_FALLBACK = {lat:51.5074, lon:-0.1278}; // London, used only when geocoding is unreachable
 
 // Store a chosen city onto the profile and re-derive latBand from its real latitude.
-function applyCity(name, country, lat, lon, isFallback){
+function applyCity(name, country, lat, lon, isFallback, code){
   profile.city = name; profile.country = country||''; profile.lat = lat; profile.lon = lon;
+  if(code) profile.countryCode = code;
   profile.latBand = deriveLatBandFromLat(lat);
   if(isFallback) profile.cityFallback = true; else delete profile.cityFallback;
 }
@@ -839,7 +840,7 @@ window.geoCityInput = function(el, ddId, onPick){
       if(!res.length){ dd.style.display='none'; dd.innerHTML=''; return; }
       dd.innerHTML = res.map(c=>{
         const sub = [c.admin1, c.country].filter(Boolean).join(', ');
-        return `<div class="city-opt" onclick="${onPick}(this)" data-name="${escAttr(c.name)}" data-country="${escAttr(c.country||'')}" data-lat="${c.latitude}" data-lon="${c.longitude}">`+
+        return `<div class="city-opt" onclick="${onPick}(this)" data-name="${escAttr(c.name)}" data-country="${escAttr(c.country||'')}" data-cc="${escAttr(c.country_code||'')}" data-lat="${c.latitude}" data-lon="${c.longitude}">`+
                `<span class="city-opt-name">${escAttr(c.name)}</span>`+(sub?`<span class="city-opt-sub">${escAttr(sub)}</span>`:'')+`</div>`;
       }).join('');
       dd.style.display='block';
@@ -849,7 +850,7 @@ window.geoCityInput = function(el, ddId, onPick){
 
 // Onboarding: pick a city from the dropdown.
 window.pickCity = function(el){
-  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false);
+  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false, el.dataset.cc);
   window._cityChosen = true;
   const inp = document.getElementById('f-city'); if(inp) inp.value = [profile.city, profile.country].filter(Boolean).join(', ');
   const dd = document.getElementById('city-dd'); if(dd){ dd.style.display='none'; dd.innerHTML=''; }
@@ -866,7 +867,7 @@ async function autoResolveCity(defCity){
     if(!c) return;
     const inp = document.getElementById('f-city');
     if(inp && inp.value.trim() !== defCity) return;          // user changed it: don't clobber
-    applyCity(c.name, c.country||'', c.latitude, c.longitude, false);
+    applyCity(c.name, c.country||'', c.latitude, c.longitude, false, c.country_code);
     window._cityChosen = true;
     if(inp) inp.value = [profile.city, profile.country].filter(Boolean).join(', ');
   }catch(e){ /* silent: save() will free-text / fallback */ }
@@ -889,7 +890,7 @@ window.openCityChange = function(){
 };
 // Picking a city here re-derives latBand, re-runs the diagnosis, persists, and refreshes.
 window.pickCityLive = function(el){
-  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false);
+  applyCity(el.dataset.name, el.dataset.country, parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), false, el.dataset.cc);
   try{
     const diagnosis = runDiagnosis(profile);
     profile.supplements = diagnosis.filter(d=>!d.contraindicated).map(d=>d.id);
@@ -1643,6 +1644,22 @@ function needsSignposting(p){
   p = p || profile;
   return (p.sciNights ?? 0) >= 3 && (p.sciImpact ?? 0) >= 2;
 }
+function isUK(p){
+  p = p || profile;
+  return p.countryCode === 'GB' || p.country === 'GB' || p.country === 'United Kingdom';
+}
+// UK users get the NHS route by name; everyone else gets the same advice without
+// country-specific services. No other country-specific signposting is attempted.
+function signpostText(){
+  return isUK()
+    ? 'Sleep problems that last more than a few weeks and affect your days are common ' +
+      'and treatable. CBT-I is the recommended first-line option in the UK, ahead of ' +
+      'medication, and it is worth speaking to your GP. Sleepio is recommended by NICE ' +
+      'and is free on prescription in parts of the NHS.'
+    : 'Sleep problems that last more than a few weeks and affect your days are common ' +
+      'and treatable. CBT-I, a talking therapy rather than medication, is the ' +
+      'first-line option most guidelines recommend, and it is worth speaking to a doctor.';
+}
 const SIGNPOST_TEXT =
   'Sleep problems that last more than a few weeks and affect your days are common and ' +
   'treatable. CBT-I is the recommended first-line option in the UK, ahead of medication, ' +
@@ -2028,7 +2045,7 @@ function switchTab(tab,el){
       </div>
       ${needsSignposting() ? `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;border:0.5px solid rgba(26,22,18,0.12);">
         <div style="font-size:10px;color:var(--orange);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">worth a conversation</div>
-        <div style="font-size:13px;color:rgba(26,22,18,0.78);line-height:1.6;">${SIGNPOST_TEXT}</div>
+        <div style="font-size:13px;color:rgba(26,22,18,0.78);line-height:1.6;">${signpostText()}</div>
       </div>` : ''}
       <div style="height:20px;"></div>
     `;
@@ -2476,7 +2493,7 @@ const RULES = [
       'one to two hours before bed, as little as 10 minutes.',
     values: (p) => ({ lat: Math.round(p.sleepLatency) }),
     fixes: [
-      { cost: 'free', action: 'Ninety minutes before bed, not immediately before. A shower right before bed does not do this.' },
+      { cost: 'free', action: 'It needs to be ninety minutes before bed, not immediately before. Right before bed does not do the same thing.' },
       { cost: 'free', action: 'Ten minutes at bath temperature is enough. It does not need to be long.' }
     ],
     surprise: 8
@@ -2502,7 +2519,7 @@ const RULES = [
       'ranges vary, so treat the figure as a starting point rather than a threshold.',
     values: (p) => ({ n: p.nightWakings }),
     fixes: [
-      { cost: 'free', action: 'Aim for roughly 17-19°C. Window open, thinner duvet.' },
+      { cost: 'free', action: 'Aim for roughly 17-19°C: a cooler room and fewer layers.' },
       { cost: 'free', action: 'If you share a bed, separate duvets solve the disagreement better than a thermostat does.' }
     ],
     surprise: 6
@@ -2519,8 +2536,9 @@ const RULES = [
       'You spend the last hour on screens, and it tends to be what you are doing on ' +
       'them rather than the light.',
     mechanism:
-      'Cognitive and emotional arousal is the dominant mechanism. Work, email and ' +
-      'markets keep the system engaged when it needs to disengage. Melatonin ' +
+      'Cognitive and emotional arousal is the dominant mechanism. Anything you will ' +
+      'still be thinking about afterwards keeps the system engaged when it needs to ' +
+      'disengage. Melatonin ' +
       'suppression from device screens is real but small at typical brightness.',
     evidence: 'MODERATE',
     citation:
@@ -2528,7 +2546,7 @@ const RULES = [
       'latency that was not statistically significant. The arousal pathway is the ' +
       'better-supported explanation.',
     fixes: [
-      { cost: 'free', action: 'The last thirty minutes: no work, no email, no markets. Anything else is fine.' },
+      { cost: 'free', action: 'The last thirty minutes: nothing you will still be thinking about afterwards. Anything else is fine.' },
       { cost: 'free', action: 'A physical transition, a shower or reading, signals the change better than a filter does.' },
       { cost: 'free', action: 'Do not buy blue-light glasses for this. The trials do not support them.' }
     ],
@@ -2540,7 +2558,15 @@ const RULES = [
     domain: 'sleep',
     tier: 2,
     requires: ['trainingTime', 'bedTime'],
-    fires: (p) => hoursUntil(p.trainingTime + 1.5, p.bedTime) < 2,
+    // Linear day, so a session that ends AFTER bedtime yields a negative gap and still
+    // fires. hoursUntil() wraps and would return ~23h for that case.
+    fires: (p) => {
+      const wake = p.wakeTime ?? p.wake ?? 7;
+      let t = (typeof p.trainingTime === 'number') ? p.trainingTime : null;
+      if(t == null) return false;
+      if(t < wake) t += 24;
+      return (bedLinear(p) - (t + 1.5)) < 2;
+    },
     effect: 'no impairment from evening exercise overall; disruption only for vigorous sessions ending within about an hour of bed',
     contradiction:
       'You finish training close to bedtime, which for most people does not harm ' +
@@ -2607,27 +2633,6 @@ const RULES = [
     surprise: 6
   },
 
-  {
-    id: 'late-heavy-meal',
-    domain: 'sleep',
-    tier: 3,
-    requires: ['eatingWindowEnd', 'bedTime'],
-    fires: (p) => hoursUntil(p.eatingWindowEnd, p.bedTime) < 2,
-    effect: 'modest: later and larger meals are associated with longer onset and more fragmentation',
-    contradiction:
-      'You tend to finish eating close to bed, which tends to have a real but ' +
-      'modest effect.',
-    mechanism:
-      'Digestion raises core temperature and metabolic rate at the point where both ' +
-      'need to fall for sleep onset.',
-    evidence: 'MODERATE',
-    citation: 'Direction is consistent; effect sizes are small relative to timing, caffeine and alcohol.',
-    fixes: [
-      { cost: 'free', action: 'Aim to finish two to three hours before bed where the day allows it.' },
-      { cost: 'free', action: 'If you train late, make the post-training meal smaller and protein-forward.' }
-    ],
-    surprise: 4
-  },
 
   {
     id: 'noise-and-light',
@@ -2721,11 +2726,13 @@ const RULES = [
       'at bedtime for ordinary insomnia it does very little.',
     evidence: 'MODERATE',
     citation:
-      'Meta-analysis: onset latency reduced 7.06 min, total sleep increased 8.25 min. ' +
-      'Prescription-only in the UK.',
+      'Meta-analysis: onset latency reduced 7.06 min, total sleep increased 8.25 min.',
+    values: () => ({ availability: isUK()
+      ? 'It is prescription-only in the UK'
+      : 'Whether it is available over the counter varies by country' }),
     fixes: [
       { cost: 'free', action: 'If you are using it for jet lag or a shifted phase, timing is everything. For ordinary sleeplessness it is not the tool.' },
-      { cost: 'free', action: 'It is prescription-only in the UK, so this is worth a conversation rather than an order.' }
+      { cost: 'free', action: '{availability}, so this is worth a conversation rather than an order.' }
     ],
     surprise: 8
   },
@@ -2773,7 +2780,7 @@ const RULES = [
       'Small samples, short durations, frequently industry-linked, and rarely ' +
       'replicated independently.',
     fixes: [
-      { cost: 'free', action: 'Spend the money on blackout and earplugs before another capsule.' },
+      { cost: 'free', action: 'Blackout and earplugs are better value than another capsule.' },
       { cost: 'free', action: 'If one of these works for you, that is fine. Just do not expect it to carry the night.' }
     ],
     surprise: 6
@@ -2797,8 +2804,9 @@ const RULES = [
     citation:
       'Established in restless legs literature. Requires a blood test and a ' +
       'clinician to interpret: this is a signpost, not an inference.',
+    values: () => ({ doctor: isUK() ? 'your GP' : 'a doctor' }),
     fixes: [
-      { cost: 'free', action: 'Worth asking your GP about ferritin specifically, not just a full blood count.' },
+      { cost: 'free', action: 'Worth asking {doctor} about ferritin specifically, not just a full blood count.' },
       { cost: 'free', action: 'Do not start iron on your own. Excess iron is harmful and the test is the point.' }
     ],
     surprise: 8
