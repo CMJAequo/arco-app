@@ -1320,20 +1320,19 @@ function contradictionInner(r){
   const fixes=[...r.fixes].sort((a,b)=>{const av=a.cost==='free'?-1:a.cost,bv=b.cost==='free'?-1:b.cost;return av-bv;});
   const wid = 'why-' + r.id;
   return `
-    ${cardHead('tonight\'s lever', 'the highest-value change available to you right now. one at a time.')}
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:13px;">high value levers</div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
       <div style="font-size:15px;font-weight:500;color:var(--ink);line-height:1.45;flex:1;">${r.contradiction}</div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;">
+    <div style="margin-bottom:14px;">
       <span style="font-size:9px;font-weight:${g.weight};color:${g.color};border:0.5px ${g.border} ${g.color};border-radius:4px;padding:2px 6px;letter-spacing:0.05em;">${g.label} EVIDENCE</span>
-      ${r.effect?`<span style="font-size:10px;color:var(--muted);">${r.effect}</span>`:''}
     </div>
     <div style="font-size:10px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">what to do</div>
     <div style="display:flex;flex-direction:column;gap:9px;">
-      ${fixes.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:10px;font-weight:600;color:var(--orange);min-width:32px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em;">${f.cost==='free'?'free':'£'+f.cost}</span><span style="font-size:13px;color:rgba(26,22,18,0.72);line-height:1.5;">${f.action}</span></div>`).join('')}
+      ${fixes.map((f,i)=>`<div style="display:flex;gap:10px;align-items:flex-start;"><span style="font-size:12px;font-weight:600;color:var(--orange);min-width:22px;flex-shrink:0;">#${i+1}</span><span style="font-size:13px;color:rgba(26,22,18,0.72);line-height:1.5;">${f.cost==='free'?'':`<span style="color:var(--ink);font-weight:500;">£${f.cost} · </span>`}${f.action}</span></div>`).join('')}
     </div>
     <div onclick="event.stopPropagation();(function(e){e.style.display=e.style.display==='none'?'block':'none';})(document.getElementById('${wid}'))" style="font-size:11px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:0.5px solid var(--sep);cursor:pointer;">why this works →</div>
-    <div id="${wid}" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-top:9px;">${r.mechanism}${r.citation?`<div style="margin-top:8px;font-size:11px;color:rgba(26,22,18,0.42);line-height:1.55;">${r.citation}</div>`:''}</div>`;
+    <div id="${wid}" style="display:none;font-size:12px;color:var(--muted);line-height:1.6;margin-top:9px;">${r.effect?`<div style="margin-bottom:8px;color:rgba(26,22,18,0.6);">Measured effect: ${r.effect}</div>`:''}${r.mechanism}${r.citation?`<div style="margin-top:8px;font-size:11px;color:rgba(26,22,18,0.42);line-height:1.55;">${r.citation}</div>`:''}</div>`;
 }
 
 // Lever adoption: the user says they have started doing something, and the app tracks
@@ -1374,36 +1373,44 @@ function wakeRegularityCard(){
   if(wd == null) return '';
   const free = (fr == null) ? wd : fr;
   const DOW = ['M','T','W','T','F','S','S'];
-  const isFree = i => i >= 5;                       // Sat/Sun as the free days
+  const isFree = i => i >= 5;
   const times = DOW.map((_, i) => isFree(i) ? free : wd);
-  const lo = Math.min(...times), hi = Math.max(...times);
+  const lo = Math.min(wd, free), hi = Math.max(wd, free);
   const spread = hi - lo;
-  // Scale the plot to a 4h span around the times so a small drift is still visible.
-  const pad = Math.max(0.75, (4 - spread) / 2);
+  const pad = Math.max(0.6, (2.5 - spread) / 2);
   const top = lo - pad, bottom = hi + pad, range = bottom - top;
+  const H = 92;                                       // plot height in px
+  const y = t => ((t - top) / range) * H;             // px from the top
+  const yLo = y(lo), yHi = y(hi);
   const todayIdx = (new Date().getDay() + 6) % 7;
-  const bars = times.map((t, i) => {
-    const y = ((t - top) / range) * 100;            // % from the top of the plot
-    const isToday = i === todayIdx;
-    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;">
-      <div style="position:relative;width:100%;height:62px;">
-        <div style="position:absolute;left:50%;transform:translateX(-50%);top:${y.toFixed(1)}%;width:${isFree(i)?'13px':'11px'};height:${isFree(i)?'13px':'11px'};margin-top:-6px;border-radius:50%;background:${isFree(i)?'rgba(26,22,18,0.30)':'rgba(214,158,52,0.95)'};"></div>
-      </div>
-      <div style="font-size:9.5px;letter-spacing:0.05em;color:${isToday?'var(--ink)':'var(--muted)'};font-weight:${isToday?'700':'400'};">${DOW[i]}</div>
-    </div>`;
-  }).join('');
+
+  // The two wake times as reference lines, with the gap between them shaded. The band
+  // IS the story: its height is how much the wake time moves.
+  const band = spread > 0.01 ? `<div style="position:absolute;left:0;right:0;top:${yLo}px;height:${yHi-yLo}px;background:rgba(214,158,52,0.16);"></div>` : '';
+  const line = (yy, colour, dash) => `<div style="position:absolute;left:0;right:0;top:${yy}px;height:0;border-top:1.5px ${dash} ${colour};"></div>`;
+  const dots = times.map((t, i) => `<div style="position:absolute;top:${y(t)}px;left:${((i+0.5)/7*100).toFixed(2)}%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:${isFree(i)?'rgba(26,22,18,0.55)':'rgba(214,158,52,1)'};box-shadow:0 0 0 3px var(--card);"></div>`).join('');
+  const labels = DOW.map((d,i)=>`<div style="flex:1;text-align:center;font-size:9.5px;letter-spacing:0.05em;color:${i===todayIdx?'var(--ink)':'var(--muted)'};font-weight:${i===todayIdx?'700':'400'};">${d}</div>`).join('');
+
   const h = Math.floor(spread), m = Math.round((spread - h) * 60);
   const spreadTxt = spread < 0.25 ? 'within a few minutes'
-    : (h > 0 ? (m > 0 ? `by about ${h}h ${m}m` : `by about ${h} hours`) : `by about ${m} minutes`);
+    : (h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h} hours`) : `${m} minutes`);
   const note = spread < 1
-    ? `Holding ${spreadTxt}. Worth protecting.`
-    : `Moving ${spreadTxt}. Pulling the free-day end closer is the highest-value change you can make.`;
+    ? `Holding ${spreadTxt === 'within a few minutes' ? spreadTxt : 'to ' + spreadTxt}. Worth protecting.`
+    : `Moving by ${spreadTxt}. Pulling the free-day line up towards the work-day one is the highest-value change you can make.`;
+
   return `<div style="background:var(--card);border-radius:var(--radius);padding:16px 18px 14px;margin-bottom:12px;">
     ${cardHead('wake time', 'the one number this app cares about most. no score, just where your mornings sit.')}
-    <div style="display:flex;gap:3px;align-items:flex-start;">${bars}</div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;">
-      <span>${fmt(top)}</span><span>${fmt(bottom)}</span>
+    <div style="position:relative;height:${H}px;margin:2px 0 4px;">
+      <div style="position:absolute;left:0;right:82px;top:0;bottom:0;">
+        ${band}
+        ${line(y(wd), 'rgba(214,158,52,1)', 'solid')}
+        ${line(y(free), 'rgba(26,22,18,0.55)', 'dashed')}
+        ${dots}
+      </div>
+      <div style="position:absolute;right:0;width:80px;top:${y(wd)}px;transform:translateY(-50%);font-size:10px;font-weight:600;color:rgba(150,110,30,1);">${fmt(wd)} work</div>
+      <div style="position:absolute;right:0;width:80px;top:${y(free)}px;transform:translateY(-50%);font-size:10px;font-weight:600;color:rgba(26,22,18,0.6);">${fmt(free)} free</div>
     </div>
+    <div style="display:flex;margin-right:82px;">${labels}</div>
     <div style="font-size:13px;color:var(--ink);line-height:1.5;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
   </div>`;
 }
