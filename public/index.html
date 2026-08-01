@@ -1820,7 +1820,8 @@ const RULES = [
     fires: (p) => Math.abs(circDiff(p.weekendWakeTime, p.wakeTime)) >= 1,
     effect: '20-48% lower all-cause mortality, most versus least regular quintile',
     contradiction:
-      'Your wake time moves by about {gap} between work days and free days.',
+      'Wake time is the anchor for the whole rhythm, and yours moves by about {gap} ' +
+      'across the week.',
     mechanism:
       'A wake time that moves around shifts your circadian phase in the same way ' +
       'crossing time zones does. The body clock is anchored by when light first ' +
@@ -1850,8 +1851,7 @@ const RULES = [
     fires: (p) => hoursUntil(p.bedTime, p.wakeTime) < 7,
     effect: 'extending time in bed to 10h raised total sleep by 111 min and improved sprint time and shooting accuracy by about 9%',
     contradiction:
-      'You are giving yourself about {tib} in bed, which is the ceiling on ' +
-      'everything else here.',
+      'Time in bed is the ceiling on time asleep, and yours is about {tib}.',
     mechanism:
       'Time in bed is the ceiling on time asleep. Every other lever here works ' +
       'inside the window you allow, so the window comes first.',
@@ -1888,8 +1888,8 @@ const RULES = [
     },
     effect: '400mg taken six hours before bed cut objectively measured total sleep by more than an hour',
     contradiction:
-      'Your last caffeine is {gapPhrase}, inside the window where it ' +
-      'tends to cost sleep.',
+      'Caffeine within eight hours of bed tends to cost sleep, and yours is ' +
+      '{gapPhrase}.',
     mechanism:
       'Caffeine blocks adenosine, the molecule that builds sleep pressure across ' +
       'the day. Clearance varies two to three fold by CYP1A2 genotype, and oral ' +
@@ -1923,8 +1923,7 @@ const RULES = [
     fires: (p) => p.alcoholTiming === 'late',
     effect: 'about two drinks measurably cut REM; each additional 1 g/kg delayed REM onset by roughly 30 min and cut REM duration by roughly 40 min',
     contradiction:
-      'You tend to drink later in the evening, which tends to disturb the second ' +
-      'half of the night.',
+      'Drinking later in the evening tends to disturb the second half of the night.',
     mechanism:
       'Alcohol is sedating early and disruptive late. As it clears, it suppresses ' +
       'and delays REM and fragments the back half of the night, which is why a ' +
@@ -1948,8 +1947,8 @@ const RULES = [
     fires: (p) => p.morningLight === false,
     effect: 'the primary circadian entrainment signal; advances sleep phase and stabilises timing',
     contradiction:
-      'You are not getting daylight in the hour after waking, which is the signal ' +
-      'that sets tonight.',
+      'Daylight in the hour after waking is the signal that sets tonight, and you ' +
+      'are not getting it.',
     mechanism:
       'Light hitting the retina shortly after waking sets circadian timing and ' +
       'starts the countdown to melatonin release. Outdoor daylight is 1,000 to ' +
@@ -1976,8 +1975,8 @@ const RULES = [
     fires: (p) => p.sleepLatency >= 20,
     effect: 'sleep onset latency reduced by about 36%',
     contradiction:
-      'You take about {lat} minutes to fall asleep, and a warm bath ninety minutes ' +
-      'before bed is the best-evidenced fix for that.',
+      'A warm bath ninety minutes before bed is the best-evidenced way to fall ' +
+      'asleep faster, and you take about {lat} minutes.',
     mechanism:
       'Warming the skin causes peripheral vasodilation, which accelerates the core ' +
       'temperature drop that gates sleep onset. The delay is the point: the effect ' +
@@ -2002,8 +2001,8 @@ const RULES = [
     fires: (p) => p.nightWakings >= 2,
     effect: 'heat fragments sleep and reduces deep and REM; cooler rooms support the core temperature drop',
     contradiction:
-      'You wake {n} times most nights, and room temperature is one of the most ' +
-      'common causes worth ruling out.',
+      'Room temperature is one of the most common causes of waking in the night, ' +
+      'and you wake {n} times most nights.',
     mechanism:
       'Sleep onset and maintenance depend on core temperature falling. A room that ' +
       'is too warm works against that all night, and tends to show up as waking ' +
@@ -2028,8 +2027,8 @@ const RULES = [
     fires: (p) => p.screensBeforeBed >= 30,
     effect: 'blue-blocking glasses reduced sleep onset latency by 4.86 min, not statistically significant, with no effect on sleep efficiency or wake after sleep onset',
     contradiction:
-      'You spend the last hour on screens, and it tends to be what you are doing on ' +
-      'them rather than the light.',
+      'With screens before bed it tends to be what you are doing on them, not the ' +
+      'light they emit, that keeps you up.',
     mechanism:
       'Cognitive and emotional arousal is the dominant mechanism. Anything you will ' +
       'still be thinking about afterwards keeps the system engaged when it needs to ' +
@@ -2064,8 +2063,8 @@ const RULES = [
     },
     effect: 'no impairment from evening exercise overall; disruption only for vigorous sessions ending within about an hour of bed',
     contradiction:
-      'You finish training close to bedtime, which for most people does not harm ' +
-      'sleep at all.',
+      'Evening training does not harm sleep for most people, even finishing close ' +
+      'to bedtime.',
     mechanism:
       'Core temperature and sympathetic arousal stay elevated for a period after ' +
       'hard training. The effect on sleep is small unless the session is intense ' +
@@ -2189,7 +2188,7 @@ const RULES = [
     fires: (p) => has(p.currentStack, 'magnesium'),
     effect: 'non-significant 16 min increase in total sleep across 3 RCTs',
     contradiction:
-      'You take magnesium, and for sleep specifically the evidence is weak.',
+      'For sleep specifically, the evidence behind magnesium is weak.',
     mechanism:
       'Magnesium is a genuine cofactor in many processes and worth correcting if ' +
       'you are deficient. That is a different claim from improving sleep in someone ' +
@@ -2265,8 +2264,7 @@ const RULES = [
       .some(x => has(p.currentStack, x)),
     effect: 'small samples, frequently industry-linked, effects not reliably replicated',
     contradiction:
-      'The sleep-aid category you are buying from is mostly weak evidence sold ' +
-      'confidently.',
+      'The sleep-aid category is mostly weak evidence sold confidently.',
     mechanism:
       'Glycine, theanine and valerian have some signal in small trials. CBD, CBN, ' +
       '5-HTP, GABA and sleepy teas do not have the evidence their marketing implies.',
