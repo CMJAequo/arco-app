@@ -2267,6 +2267,12 @@ function supView(key, p){
 const has = (arr, x) => Array.isArray(arr) && arr.includes(x);
 
 // Hours between two 24h decimal times, handling midnight wraparound.
+// Returns a DURATION, wrapping across midnight: hoursUntil(23, 7) is 8.
+// Use it only for spans that are meant to cross midnight, such as time asleep.
+// Do NOT use it for a gap to a deadline (caffeine or training before bed): when the
+// earlier time falls after the deadline the wrap returns ~23h instead of a negative
+// number, and the comparison silently passes. For those, put both times on the linear
+// day with bedLinear()/dayH() and subtract. Four bugs of this shape have been fixed.
 const hoursUntil = (from, to) => (to >= from ? to - from : 24 - from + to);
 
 // Northern-hemisphere month check for high-latitude vitamin D window.
@@ -2394,10 +2400,19 @@ const RULES = [
     domain: 'sleep',
     tier: 1,
     requires: ['lastCoffeeTime', 'bedTime'],
-    fires: (p) => hoursUntil(p.lastCoffeeTime, p.bedTime) < 8,
+    // Linear day: caffeine taken after the stated bedtime gives a negative gap and still
+    // fires. hoursUntil() wraps and would return ~23h, going silent for exactly the
+    // person whose caffeine is closest to bed.
+    fires: (p) => {
+      const wake = p.wakeTime ?? p.wake ?? 7;
+      let c = p.lastCoffeeTime;
+      if(c == null) return false;
+      if(c < wake) c += 24;
+      return (bedLinear(p) - c) < 8;
+    },
     effect: '400mg taken six hours before bed cut objectively measured total sleep by more than an hour',
     contradiction:
-      'Your last caffeine is about {gap} before bed, inside the window where it ' +
+      'Your last caffeine is {gapPhrase}, inside the window where it ' +
       'tends to cost sleep.',
     mechanism:
       'Caffeine blocks adenosine, the molecule that builds sleep pressure across ' +
@@ -2409,9 +2424,13 @@ const RULES = [
       'Drake et al. 2013, J Clin Sleep Med. n=12, double-blind double-dummy ' +
       'crossover. The disruption was measurable but not perceived by subjects.',
     values: (p) => {
-      const v = hoursUntil(p.lastCoffeeTime, p.bedTime);
+      const wake = p.wakeTime ?? p.wake ?? 7;
+      let c = p.lastCoffeeTime; if(c < wake) c += 24;
+      const v = bedLinear(p) - c;
+      if(v <= 0) return { gapPhrase: 'later than the time you say you go to bed' };
       const h = Math.floor(v), m = Math.round((v - h) * 60);
-      return { gap: h > 0 ? (m > 0 ? h + 'h ' + m + 'm' : h + ' hours') : m + ' minutes' };
+      const t = h > 0 ? (m > 0 ? h + 'h ' + m + 'm' : h + ' hours') : m + ' minutes';
+      return { gapPhrase: 'about ' + t + ' before bed' };
     },
     fixes: [
       { cost: 'free', action: 'Last caffeine 8h before bed for 200mg, 10h for 400mg.' },
