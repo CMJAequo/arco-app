@@ -1586,94 +1586,6 @@ function drawClock(h){
     });
   }
 
-  // Supplement markers — connector line → dot → label
-  const ABBREV = {
-    vitd:'D3', magnesium:'Mg', omega3:'ω3', zinc:'Zn',
-    creatine:'Cr', ashwagandha:'Ash', b12:'B12', k2:'K2',
-    coq10:'Q10', magnesium_threonate:'MgT', iron:'Fe'
-  };
-  // Personalised windows; anytime supplements (creatine) get no clock dot.
-  const sups2 = (profile.supplements || []).map(k => supView(k)).filter(s => s && !s.anytime);
-  // Cluster doses that sit close together on the dial (not just identical times) so their
-  // dots and labels get fanned apart instead of overlapping.
-  const CLUSTER_H = 1.6;
-  const hourGroups2 = {};
-  [...sups2].sort((a,b) => a.window[0] - b.window[0]).forEach(s => {
-    const near = Object.keys(hourGroups2).find(k => Math.abs(parseFloat(k) - s.window[0]) < CLUSTER_H);
-    const key = near != null ? near : String(s.window[0]);
-    (hourGroups2[key] = hourGroups2[key] || []).push(s.key);
-  });
-  const groupOf = s => Object.keys(hourGroups2).find(k => Math.abs(parseFloat(k) - s.window[0]) < CLUSTER_H) || String(s.window[0]);
-
-  // Pulse factor — oscillates 0→1→0 over ~2 seconds
-  const pulse = (Math.sin(Date.now() / 400) + 1) / 2;
-  const dotR = 5*dpr;
-
-  // State is carried by FILL, not colour: taken = solid, due = hollow + pulsing ring,
-  // overdue = hollow solid stroke, upcoming = faint hollow. Monochrome ink.
-  const INK = '26,22,18';
-  // Signed angular distance (hours) of a relative to b, wrapping.
-  const angSignedH = (a,b) => { let d=(a-b)%24; if(d>12)d-=24; if(d<-12)d+=24; return d; };
-  const MARKER_CLEAR = 1.5;   // hours of angular clearance around the whole sun-marker block (tick+time+icon)
-  sups2.forEach(s => {
-    const key = s.key;
-    const taken2 = takenToday.includes(key);
-    const isDue2 = hL >= s.window[0] && hL < s.window[1];
-    const group2 = hourGroups2[groupOf(s)] || [key];
-    const idx2 = group2.indexOf(key);
-    const spread2 = group2.length > 1 ? (idx2 - (group2.length-1)/2) * 1.15 : 0;
-    let supH = s.window[0] + spread2;
-    // Treat each sun marker (tick + time label + icon) as one block and nudge a dot
-    // angularly clear of it, to whichever side it already leans, so it never overlaps.
-    if(hasSun){
-      [SR,SS].forEach(mk => {
-        const d = angSignedH(supH, mk);
-        if(Math.abs(d) < MARKER_CLEAR) supH = mk + (d>=0 ? MARKER_CLEAR : -MARKER_CLEAR);
-      });
-    }
-    const ma2 = (supH / 24) * Math.PI * 2 - Math.PI / 2;
-
-    const ringEdge = r + SW/2;
-    const dotDist = ringEdge + 13*dpr;
-    const lblDist = ringEdge + 33*dpr;
-    const dx2 = cx + Math.cos(ma2) * dotDist;
-    const dy2 = cy + Math.sin(ma2) * dotDist;
-    const lx2 = cx + Math.cos(ma2) * lblDist;
-    const ly2 = cy + Math.sin(ma2) * lblDist;
-
-    const isOverdue2 = !taken2 && hL >= s.window[1];
-    if(taken2){
-      // taken: solid filled dot
-      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
-      ctx.fillStyle=`rgba(${INK},0.9)`;ctx.fill();
-    } else if(isDue2){
-      // due now: hollow dot ringed by a subtle pulse
-      ctx.beginPath();ctx.arc(dx2,dy2,dotR+(3+pulse*3)*dpr,0,Math.PI*2);
-      ctx.strokeStyle=`rgba(${INK},${0.22+pulse*0.33})`;ctx.lineWidth=1.5*dpr;ctx.stroke();
-      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
-      ctx.fillStyle='#EDE9E1';ctx.fill();
-      ctx.strokeStyle=`rgba(${INK},0.95)`;ctx.lineWidth=2*dpr;ctx.stroke();
-    } else if(isOverdue2){
-      // overdue: hollow solid-stroke ring, a touch stronger than upcoming
-      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
-      ctx.fillStyle='#EDE9E1';ctx.fill();
-      ctx.strokeStyle=`rgba(${INK},0.55)`;ctx.lineWidth=1.5*dpr;ctx.stroke();
-    } else {
-      // upcoming: faint hollow dot
-      ctx.beginPath();ctx.arc(dx2,dy2,dotR,0,Math.PI*2);
-      ctx.fillStyle='#EDE9E1';ctx.fill();
-      ctx.strokeStyle=`rgba(${INK},0.4)`;ctx.lineWidth=1.5*dpr;ctx.stroke();
-    }
-
-    // Label
-    const lblOp = taken2 ? 0.7 : isDue2 ? 1.0 : isOverdue2 ? 0.7 : 0.4;
-    ctx.font = `600 ${9.5*dpr}px Switzer,sans-serif`;
-    ctx.fillStyle = `rgba(${INK},${lblOp})`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(ABBREV[key] || key.slice(0,3).toUpperCase(), lx2, ly2);
-  });
-
   // Hour figures — 0 / 6h / 12h / 18h in the gap between the inner face and the ring.
   {
     const bandMid = inner + (r - SW/2 - inner) * 0.3;   // inner part of the gap, clear of the sleep track
@@ -2033,6 +1945,22 @@ const WINDOW_LINE = {
   postTraining:'Refuel after training. Protein-forward rather than a full second dinner.',
   sleep:'Asleep, or heading there. Nothing to act on right now.'
 };
+// One-line versions for the current-phase card under the strip. The popup keeps the
+// full copy; this is the glanceable version.
+const WINDOW_SHORT = {
+  morningLight:'Get outside if you can. It anchors the whole day.',
+  sleepInertia:'Grogginess lifts on its own. Do not judge the day on it.',
+  trough:'A circadian dip for many people. Admin, not hard thinking.',
+  physicalPeak:'Strength tends to peak around now.',
+  windDown:'Ease off so sleep pressure can take over.',
+  neutral:'No strong peak or dip. Good for routine work.',
+  dipWalk:'Ten minutes outside now blunts the dip.',
+  breakfast:'Protein-forward if you can manage it.',
+  lunch:'Lighter and lower-carbohydrate reduces the afternoon dip.',
+  mainMeal:'Timed to be digested before you train.',
+  postTraining:'Refuel. Protein-forward rather than a second dinner.',
+  sleep:'Asleep, or heading there. Nothing to act on.'
+};
 window.openWindowPopup = function(name, start, end){
   const line = name === 'dipWalk' ? dipWalkLine(profile)
     : name === 'morningLight' ? morningLightLine(profile) : WINDOW_LINE[name]; if(!line) return;
@@ -2179,13 +2107,26 @@ function dayStripCard(){
   const nowHtml = inDay
     ? `<div style="position:absolute;top:16px;bottom:0;left:${pct(h)}%;width:1.5px;background:rgba(232,82,10,0.95);z-index:3;pointer-events:none;"></div>` : '';
   // The one label: the current phase, at the now-line. Everything else stays unlabelled.
-  let labelHtml = '';
-  if(inDay){
-    const ph = getCurrentPhase(h, p);
-    if(ph){ const nm = ph.key === 'supplement' ? (SHORT_NAME[ph.sup.key]||ph.sup.name) : (WINDOW_NAME[ph.key]||ph.key);
-      const lx = Math.max(9, Math.min(91, pct(h)));
-      labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
-    }
+  // The same phase also gets a short note under the bar, so the encoding pays out in words.
+  let labelHtml = '', phaseNoteHtml = '';
+  const phNow = getCurrentPhase(h, p);
+  if(inDay && phNow){
+    const nm = phNow.key === 'supplement' ? (SHORT_NAME[phNow.sup.key]||phNow.sup.name) : (WINDOW_NAME[phNow.key]||phNow.key);
+    const lx = Math.max(9, Math.min(91, pct(h)));
+    labelHtml = `<div style="position:absolute;top:0;left:${lx}%;transform:translateX(-50%);font-size:10px;color:rgba(26,22,18,0.55);white-space:nowrap;font-weight:600;letter-spacing:0.02em;">${String(nm).toLowerCase()}</div>`;
+  }
+  if(phNow){
+    const isSup = phNow.key === 'supplement';
+    const nm = isSup ? (SHORT_NAME[phNow.sup.key]||phNow.sup.name) : (WINDOW_NAME[phNow.key]||phNow.key);
+    const note = isSup ? `Take ${phNow.sup.dose} now.` : (WINDOW_SHORT[phNow.key] || '');
+    const range = phNow.key === 'sleep' ? '' : `${fmt(phNow.start)}–${fmt(phNow.end)}`;
+    phaseNoteHtml = `<div onclick="openWindowPopup('${isSup?'neutral':phNow.key}',${+phNow.start.toFixed(3)},${+phNow.end.toFixed(3)})" style="margin-top:14px;background:rgba(26,22,18,0.05);border-radius:12px;padding:11px 13px;cursor:pointer;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:3px;">
+        <span style="font-size:10px;font-weight:600;color:var(--orange);letter-spacing:0.07em;text-transform:uppercase;">now · ${nm}</span>
+        ${range?`<span style="font-size:10px;color:var(--muted);flex-shrink:0;">${range}</span>`:''}
+      </div>
+      <div style="font-size:12px;color:rgba(26,22,18,0.7);line-height:1.5;">${note}</div>
+    </div>`;
   }
   // Card wrapper: title above, then label row / strip / physicalPeak line, with a short
   // legend so the encoding does not have to be guessed. now-line spans strip+peak.
@@ -2198,6 +2139,7 @@ function dayStripCard(){
       <div style="position:relative;height:5px;margin-top:3px;">${peakHtml}</div>
       ${nowHtml}
     </div>
+    ${phaseNoteHtml}
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:10px;color:var(--muted);">
       <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.sharp};"></span>steady</span>
       <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${TONE.dull};"></span>low points</span>
