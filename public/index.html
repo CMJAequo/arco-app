@@ -428,14 +428,21 @@ const steps=[
     <div class="chip-group" id="g-resume">
       <div class="chip${profile.resumeEasily===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-resume','ink')">usually yes</div>
       <div class="chip${profile.resumeEasily===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-resume','ink')">often lie awake</div>
+    </div>
+    <div class="field-label">lying awake, what is usually going on?</div>
+    <div class="chip-group" id="g-arousal">
+      ${[['cognitive','mind will not stop'],['somatic','body feels wired'],['both','both'],['neither','neither, just awake']]
+        .map(([v,l])=>`<div class="chip${profile.preSleepArousal===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-arousal','ink')">${l}</div>`).join('')}
     </div>`,
    save:()=>{
      const lat=getChip('g-latency'); if(lat!=null) profile.sleepLatency=parseInt(lat);
      const nw=getChip('g-wakings');  if(nw!=null) profile.nightWakings=parseInt(nw);
      const re=getChip('g-resume');   if(re!=null) profile.resumeEasily=(re==='yes');
-     // The hormone curves still want a 1-5 quality figure, but asking for it is a worse
-     // measurement than deriving it from onset and fragmentation, which are more robust
-     // to self-report. Never shown to the user.
+     // Pre-sleep arousal is the single highest-value question in the app: hyperarousal is
+     // the dominant explanatory model of insomnia and arousal sits on the causal path from
+     // worry to poor sleep, not merely alongside it. One row on an existing step rather
+     // than a step of its own, because day-one length is the binding constraint.
+     const ar=getChip('g-arousal'); if(ar!=null) profile.preSleepArousal=ar;
      profile.sleepQuality = derivedSleepQuality(profile);
    }
   },
@@ -2130,6 +2137,67 @@ const RULES = [
   },
 
   {
+    id: 'cognitive-arousal',
+    domain: 'sleep',
+    tier: 1,
+    requires: ['preSleepArousal'],
+    fires: (p) => p.preSleepArousal === 'cognitive' || p.preSleepArousal === 'both',
+    effect: 'cognitive restructuring carries the largest single component effect in CBT-I, remission iOR 1.68 (95% CI 1.28-2.20)',
+    contradiction:
+      'A racing mind at bedtime is treated as a cause of poor sleep rather than a ' +
+      'symptom of it, and it has the largest single effect of anything studied.',
+    mechanism:
+      'Hyperarousal is the dominant explanatory model of insomnia. Pre-sleep arousal ' +
+      'sits on the path from worry to poor sleep rather than merely alongside it: it ' +
+      'mediates the relationship, which is why the arousal is the thing worth acting ' +
+      'on and not the worry itself. The bed becomes the place the thinking happens, ' +
+      'and the association strengthens every night it is repeated.',
+    evidence: 'STRONG',
+    citation:
+      'Component network meta-analysis of CBT-I: cognitive restructuring remission ' +
+      'iOR 1.68 (1.28-2.20), the largest of any component. Pre-sleep arousal mediates ' +
+      'the worry-to-sleep relationship; insomnia-specific rumination correlates with ' +
+      'trait and state arousal at beta 0.22-0.24. This is education, not treatment: ' +
+      'delivered CBT-I is a clinical intervention and this is not it.',
+    fixes: [
+      { cost: 'free', action: 'Write the loop down earlier in the evening, not in bed. The technique is called constructive worry and the point is to move the thinking to a time when it is useful.' },
+      { cost: 'free', action: 'If your mind is going in bed, the target is the arousal rather than the content. Arguing with the thought tends to raise arousal instead of lowering it.' },
+      { cost: 'free', action: 'If this is most nights and it is affecting your days, CBT-I is the first-line treatment and works better delivered properly than picked up in pieces.' }
+    ],
+    surprise: 9
+  },
+
+  {
+    id: 'sleep-effort',
+    domain: 'sleep',
+    tier: 2,
+    requires: ['sleepLatency', 'resumeEasily'],
+    fires: (p) => p.sleepLatency >= 30 && p.resumeEasily === false,
+    effect: 'stimulus control remission iOR 1.43, 95% CI 1.00-2.05 — the lower bound touches 1.00',
+    contradiction:
+      'Lying in bed awake trying to sleep is the one situation where effort reliably ' +
+      'makes the outcome less likely.',
+    mechanism:
+      'Trying to sleep raises arousal, and arousal is what prevents sleep, so effort ' +
+      'is self-defeating in a way it is not almost anywhere else. Time spent awake in ' +
+      'bed also teaches the association that bed is where you lie awake.',
+    evidence: 'MODERATE',
+    citation:
+      'Stimulus control, remission iOR 1.43 (95% CI 1.00-2.05) in component network ' +
+      'meta-analysis. Worth stating plainly that the lower bound touches 1.00 and that ' +
+      'very few studies test it in isolation, so its evidence is thinner than its ' +
+      'reputation. Sleep restriction is deliberately excluded here: it has comparable ' +
+      'support but acutely reduces total sleep and is a documented cause of dropout, ' +
+      'which makes it unsuitable for an app to hand out unsupervised.',
+    fixes: [
+      { cost: 'free', action: 'If you have been awake a while and it is not happening, getting up and doing something dull in low light tends to work better than staying and trying harder.' },
+      { cost: 'free', action: 'Turn the clock away. Checking the time converts lying awake into arithmetic about how little sleep is left, which raises arousal.' },
+      { cost: 'free', action: 'Aim to be in bed for sleep rather than for waiting. The evidence here is real but thinner than it is usually presented, so treat it as worth trying rather than proven.' }
+    ],
+    surprise: 8
+  },
+
+  {
     id: 'exercise-timing',
     domain: 'sleep',
     tier: 2,
@@ -2497,6 +2565,7 @@ function toContradictionProfile(p){
    'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
    'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours',
    'antihistamineGen','workStart','workEnd','napHabit','nicotine','bedroomDisturbance','restlessLegs',
+   'preSleepArousal','resumeEasily',
    // location + live weather (populated by loadWeather):
    'city','uvToday','sunriseToday','sunsetToday','daylightMinutes','daylightDeltaMin',
    'no2','no2Peak','no2Baseline','pollenHigh','forecast'
