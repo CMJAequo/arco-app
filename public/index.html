@@ -599,34 +599,76 @@ window.updateAntihist=function(){
   if(sec) sec.style.display=(ah&&ah.classList.contains('sel-ink'))?'block':'none';
 };
 
+// ── ONBOARDING LENGTH ─────────────────────────────────────────────────────────
+// Objective panel data on mental-health apps puts median 30-day retention at 3.3% and has
+// over 80% of users gone by day 10, so the first session is effectively the whole product.
+// Nine steps before anyone sees anything was the largest single risk in the app. The first
+// six now run on day one and the last three move to a follow-up card.
+//
+// The split is chosen so day one still collects every field the five STRONG levers need:
+// steps 7-9 only feed nicotine, naps, bedroom disturbance, restless legs, medication and
+// supplements, all of which are tier 3. Levers whose requires[] are unanswered simply skip
+// themselves, so deferring costs coverage but never correctness.
+const OB_CORE = 6;
+let _deferredMode = false;
+function stepRange(){
+  if(_redoMode) return [0, steps.length];              // a redo always walks everything
+  return _deferredMode ? [OB_CORE, steps.length] : [0, OB_CORE];
+}
+// Local only. This records where a user got to, which tells us nothing about the people who
+// leave and never come back — measuring true drop-off needs an anonymous beacon the app does
+// not have. Treat it as survivor data, not a funnel.
+function recordStepReached(i){
+  try{
+    const p = JSON.parse(localStorage.getItem('arco-ob-progress') || '{}');
+    p.furthest = Math.max(p.furthest || 0, i);
+    p.core = OB_CORE; p.total = steps.length;
+    p.seen = p.seen || {};
+    if(!p.seen[i]) p.seen[i] = new Date().toISOString();
+    localStorage.setItem('arco-ob-progress', JSON.stringify(p));
+  }catch(e){}
+}
 function renderStep(){
   const step=steps[currentStep];
-  const dots=steps.map((_,i)=>`<div class="step-dot${i<currentStep?' done':i===currentStep?' active':''}"></div>`).join('');
+  const [lo,hi]=stepRange();
+  recordStepReached(currentStep);
+  const dots=steps.slice(lo,hi).map((_,k)=>{const i=lo+k;
+    return `<div class="step-dot${i<currentStep?' done':i===currentStep?' active':''}"></div>`;}).join('');
+  const last = currentStep===hi-1;
   document.getElementById('ob-body').innerHTML=`
-    ${(currentStep>0||_redoMode)?`<button class="ob-back" onclick="prevStep()">&larr; back</button>`:''}
+    ${(currentStep>lo||_redoMode)?`<button class="ob-back" onclick="prevStep()">&larr; back</button>`:''}
     <div class="step-bar">${dots}</div>
     <div class="step-title">${step.title}</div>
     <div class="step-sub">${step.sub}</div>
     ${step.render()}
     <div class="ob-footer">
-      <button class="btn btn-ink" onclick="nextStep()">${currentStep===steps.length-1?'build my arc →':'continue →'}</button>
+      <button class="btn btn-ink" onclick="nextStep()">${last?(_deferredMode?'done →':'build my arc →'):'continue →'}</button>
       ${currentStep===0&&!_redoMode?`<div style="text-align:center;margin-top:14px;font-size:13px;color:var(--muted);">already have an account? <button class="ob-signin" onclick="showScreen('screen-login')">sign in</button></div>`:''}
     </div>`;
   if(step.render_after) step.render_after();
 }
 window.nextStep=function(){
   steps[currentStep].save();currentStep++;
-  if(currentStep>=steps.length){
+  recordStepReached(currentStep);
+  const [,hi]=stepRange();
+  if(currentStep>=hi){
     // On profile creation, capture latitude context (not used in scoring yet).
     try{ profile.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ profile.timezone = null; }
     // Prefer the real geocoded latitude; fall back to the timezone approximation only if no city resolved.
     profile.latBand = (typeof profile.lat==='number') ? deriveLatBandFromLat(profile.lat) : deriveLatBand(profile.timezone);
+    if(_deferredMode || _redoMode) profile.followUpDone = true;   // the last three are answered
     localStorage.setItem('arco-profile',JSON.stringify(profile));
     _redoMode = false; _profileSnapshot = null;   // changes committed; drop the redo snapshot
+    _deferredMode = false;
     saveProfileRemote();
     showDash();                                   // straight into Arco, no protocol step
   }
   else renderStep();
+};
+// The three deferred questions, opened from the follow-up card on the dashboard.
+window.startFollowUp = function(){
+  _deferredMode = true; currentStep = OB_CORE;
+  showScreen('screen-onboard'); renderStep();
 };
 
 // ── REDO ONBOARDING (from the Profile tab) — edits the profile ONLY. daily_logs /
@@ -645,8 +687,10 @@ window.startRedo = function(){
 };
 // Back arrow: previous step, or (on step 0 during a redo) exit without saving changes.
 window.prevStep = function(){
-  if(currentStep > 0){ steps[currentStep].save(); currentStep--; renderStep(); }
+  const [lo] = stepRange();                     // in the follow-up this is OB_CORE, not 0
+  if(currentStep > lo){ steps[currentStep].save(); currentStep--; renderStep(); }
   else if(_redoMode){ exitRedo(); }
+  else if(_deferredMode){ steps[currentStep].save(); _deferredMode = false; showDash(); }
 };
 function exitRedo(){
   if(_profileSnapshot) profile = _profileSnapshot; // discard any in-progress edits
@@ -941,6 +985,8 @@ function buildDash(){
     ${wakeRegularityCard()}
 
     ${dailyContradictionCard()}
+
+    ${followUpCard()}
 
     <div class="checkin-card" onclick="openCheckin()">
       <div class="checkin-card-left">
@@ -1433,6 +1479,21 @@ function wakeRegularityCard(){
     <div style="display:flex;">${labels}</div>
     <div style="font-size:13px;color:var(--ink);line-height:1.5;margin-top:12px;padding-top:11px;border-top:0.5px solid var(--sep);">${note}</div>
   </div>`;
+}
+
+// The three questions moved off day one. Shown until they are answered, and never as a
+// nag: no badge, no count of what is "incomplete", no implication the app is broken
+// without them. It says what answering unlocks and otherwise stays out of the way.
+function followUpCard(){
+  if(profile.followUpDone) return '';
+  if(profile.wakeTime == null) return '';        // core onboarding not finished yet
+  return `<div class="checkin-card" onclick="startFollowUp()">
+      <div class="checkin-card-left">
+        <div class="checkin-card-title">three more questions</div>
+        <div class="checkin-card-sub">Medication, supplements and what wakes you. About a minute.</div>
+      </div>
+      <div class="checkin-card-arrow">&rsaquo;</div>
+    </div>`;
 }
 
 // Every card gets the same two-line head: what it is, then what it is for. Consistency
