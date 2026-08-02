@@ -1497,6 +1497,64 @@ function wakeRegularityCard(){
   </div>`;
 }
 
+// ── THE 3AM EXPLAINER ────────────────────────────────────────────────────────
+// The front door: high search volume, and the topic is served almost entirely by cortisol
+// pseudoscience and organ-clock folklore. Normalisation comes first and causes come second,
+// which is the opposite order to every competitor. Deliberately NOT a mode or a separate
+// flow: roughly half of people switch between maintenance and early-waking symptoms within
+// four months and ICSD-3 dropped symptom-based subtypes, so treating it as a phenotype
+// would be building for a category that does not hold still.
+function threeAmArticle(){
+  const sec = (n, title, body, badge) => `
+    <div style="background:var(--card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:500;color:var(--ink);line-height:1.4;">
+          <span style="color:var(--orange);font-size:12px;font-weight:600;margin-right:7px;">${n}</span>${title}</div>
+        ${badge ? `<span style="flex:none;font-size:9px;font-weight:500;color:rgba(26,22,18,0.55);border:0.5px solid rgba(26,22,18,0.3);border-radius:4px;padding:1px 5px;letter-spacing:0.06em;">${badge}</span>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.65;">${body}</div>
+    </div>`;
+  const li = items => `<ul style="margin:0;padding-left:16px;">${items.map(t=>`<li style="margin-bottom:6px;">${t}</li>`).join('')}</ul>`;
+
+  return `
+    <div style="padding:4px 0 14px;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">explainer</div>
+      <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">why you wake at 3am</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">Start here, because the honest answer is duller and more useful than the popular one.</div>
+    </div>
+
+    ${sec(1,'It is probably normal', li([
+      'Everyone wakes several times a night, at the boundaries between sleep cycles.',
+      'You only remember the long ones. It takes roughly four minutes of continuous wakefulness before an awakening registers the next morning.',
+      'Slow-wave sleep is front-loaded and REM dominates the second half, so the back half of the night is intrinsically lighter and more wake-prone. That is why waking clusters between 3 and 5am.',
+      'Someone who sleeps through and someone who wakes at 3am can have nearly identical sleep. The difference is often what they remember.'
+    ]))}
+
+    ${sec(2,'It is not your cortisol', li([
+      'Cortisol does rise from around 2 to 3am. That is the normal circadian rise toward morning, and everyone does it.',
+      'The idea that waking triggers a cortisol surge has been tested directly: ambulatory microdialysis in 201 healthy volunteers found no evidence for a difference in the rate of cortisol change in the hour before versus after waking.',
+      'Insomnia is associated with modestly raised cortisol, but the elevation sits in the evening and early night, not at 3am.',
+      'Nothing that lowers cortisol has been shown to improve sleep maintenance.',
+      'Home cortisol testing, saliva or hair, cannot tell you anything useful here. Cortisol is pulsatile with large variation between people, and there is no validated threshold linking a home reading to night waking.'
+    ]), 'STRONG')}
+
+    ${sec(3,'What actually makes it worse', li([
+      '<strong style="color:rgba(26,22,18,0.75);font-weight:500;">Alcohol.</strong> The clearest and most reversible. A re-analysis localised the extra wake time to roughly five and a half hours after sleep onset through to morning, which is precisely this window. Even alcohol six hours before bed raised wake after sleep onset from 39 to 67 minutes.',
+      '<strong style="color:rgba(26,22,18,0.75);font-weight:500;">Too much time in bed.</strong> Going to bed earlier than your actual sleep need produces early waking. The fix is counterintuitive: go to bed later.',
+      '<strong style="color:rgba(26,22,18,0.75);font-weight:500;">What you do when you wake.</strong> Whether you lose five minutes or an hour is the part that responds to change, and it is the one thing here you can practise.',
+      '<strong style="color:rgba(26,22,18,0.75);font-weight:500;">A warm room.</strong> Heat disrupts the second half of the night more than it disrupts falling asleep.'
+    ]))}
+
+    ${sec(4,'When it is worth getting checked', li([
+      'Three or more nights a week, for three months or more, with an effect on your day. That is the threshold clinicians use.',
+      'Snoring with pauses or gasping.',
+      'Waking early alongside strong evening sleepiness, which can indicate a shifted body clock.',
+      'Night sweats in women around 45 to 55.',
+      'Anything that started when a new medication did.'
+    ]) + `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--sep);">${signpostText()}</div>`)}
+  `;
+}
+
 // The three questions moved off day one. Shown until they are answered, and never as a
 // nag: no badge, no count of what is "incomplete", no implication the app is broken
 // without them. It says what answering unlocks and otherwise stays out of the way.
@@ -1706,10 +1764,16 @@ function switchTab(tab,el){
       ['"Hours before midnight count double"','WEAK','No evidence. Deep sleep is front-loaded in the night wherever that night starts.'],
       ['Mouth taping','WEAK','Popular, poorly evidenced, and carries real risk if you have undiagnosed breathing problems at night.'],
       ['Weighted blankets, white noise, magnesium sprays, sleepy teas','WEAK','Small studies, weak effects, and heavy marketing. Harmless if you enjoy them, but they are not doing the work.'],
+      ['Cortisol supplements and adaptogens for night waking','WEAK','Cortisol is a marker, not a lever. Nothing that lowers it has been shown to improve sleep maintenance, and the 3am cortisol story it is sold against does not hold up.'],
+      ['Home cortisol testing','WEAK','Saliva and hair tests cannot answer this question. Cortisol is pulsatile with large between-person variation, and no validated threshold links a home reading to night waking.'],
+      ['"Liver time" and the organ clock','WEAK','No physiological basis. 3am recurs because slow-wave sleep is front-loaded and the second half of the night is lighter, not because of meridians.'],
+      ['Eating before bed to prevent night-time low blood sugar','WEAK','Spontaneous nocturnal hypoglycaemia does not occur in people without diabetes. This is a common claim and it is not true.'],
+      ['Magnesium for waking in the night','WEAK','The evidence for sleep maintenance specifically is weak. It is one of the most confidently sold answers to a problem it has not been shown to solve.'],
       ['Cognitive shuffling and the military method','WEAK','A conference poster and a 1981 coaching book respectively. Neither has the evidence base the internet implies.']
     ];
     document.getElementById('dash-body').innerHTML=`
-      <div style="padding:4px 0 16px;">
+      ${threeAmArticle()}
+      <div style="padding:18px 0 16px;">
         <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">learn</div>
         <div style="font-size:22px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">things that do not work</div>
         <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6;">Sleep advice is full of confident claims with nothing behind them. Knowing what to ignore is worth as much as knowing what to do.</div>
