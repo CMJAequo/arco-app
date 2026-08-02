@@ -552,8 +552,17 @@ const steps=[
     <div class="chip-group" id="g-rls">
       <div class="chip${profile.restlessLegs===true?' sel-ink':''}" data-val="yes" onclick="selChip(this,'g-rls','ink')">yes</div>
       <div class="chip${profile.restlessLegs===false?' sel-ink':''}" data-val="no" onclick="selChip(this,'g-rls','ink')">no</div>
+    </div>
+    <div class="field-label">does anyone tell you that you snore loudly, or that you stop breathing or gasp in your sleep?</div>
+    <div class="chip-group" id="g-snore">
+      ${[['yes','yes'],['no','no'],['unknown',"I don't know"]].map(([v,l])=>`<div class="chip${profile.snoringReported===v?' sel-ink':''}" data-val="${v}" onclick="selChip(this,'g-snore','ink')">${l}</div>`).join('')}
     </div>`,
    save:()=>{
+     // Stored raw and never scored. It is not combined with any other field, does not feed
+     // a risk calculation, and the only thing keyed off it states a general fact and
+     // signposts. Combining it with anything would be symptom-to-condition matching, which
+     // the MHRA treats as a medical device function.
+     const sn=getChip('g-snore'); if(sn!=null) profile.snoringReported=sn;
      const n=getChip('g-nicotine'); if(n!=null) profile.nicotine=(n==='yes');
      const np=getChip('g-naps'); if(np!=null) profile.napHabit=np;
      const d=getChip('g-disturb'); if(d!=null) profile.bedroomDisturbance=(d==='yes');
@@ -2231,6 +2240,38 @@ const RULES = [
     surprise: 6
   },
 
+  // REGULATORY BOUNDARY. The MHRA treats symptom-to-condition matching, likelihood or
+  // severity filtering and red-flag output as medical device functions; general education
+  // and signposting are not. So this lever fires on one explicit answer, states a fact
+  // about the world rather than about the user, and computes nothing. Never combine
+  // snoringReported with another field, never score it, never say "you may have" anything.
+  {
+    id: 'sdb-signpost',
+    domain: 'sleep',
+    tier: 1,
+    requires: ['snoringReported'],
+    fires: (p) => p.snoringReported === 'yes',
+    effect: 'sleep-disordered breathing is frequently missed, and presents much like sleep-maintenance insomnia',
+    contradiction:
+      'Loud snoring with pauses in breathing is a common reason people speak to a ' +
+      'GP about sleep.',
+    mechanism:
+      'Interrupted breathing during sleep causes repeated brief awakenings, and it ' +
+      'often presents the same way as waking in the night for no obvious reason. It ' +
+      'is frequently missed, particularly in women and in people who are not overweight.',
+    evidence: 'STRONG',
+    citation:
+      'General information only. Arco does not screen for, score or assess sleep ' +
+      'apnoea, and this lever deliberately performs no calculation: it reports one ' +
+      'answer back alongside a general fact.',
+    values: () => ({ doctor: isUK() ? 'your GP' : 'a doctor' }),
+    fixes: [
+      { cost: 'free', action: 'Worth mentioning to {doctor}. It is a straightforward thing to investigate.' },
+      { cost: 'free', action: 'This is general information, not an assessment of you. Arco does not and cannot tell you whether you have a sleep condition.' }
+    ],
+    surprise: 7
+  },
+
   {
     id: 'exercise-timing',
     domain: 'sleep',
@@ -2599,7 +2640,7 @@ function toContradictionProfile(p){
    'screensBeforeBed','proteinBreakfast','eatingWindowEnd','commuteMode','commuteMinutes',
    'sitLongestBlock','sleepLatency','nightWakings','alcoholTiming','coffeeCups','sleepHours',
    'antihistamineGen','workStart','workEnd','napHabit','nicotine','bedroomDisturbance','restlessLegs',
-   'preSleepArousal','resumeEasily',
+   'preSleepArousal','resumeEasily','snoringReported',
    // location + live weather (populated by loadWeather):
    'city','uvToday','sunriseToday','sunsetToday','daylightMinutes','daylightDeltaMin',
    'no2','no2Peak','no2Baseline','pollenHigh','forecast'
