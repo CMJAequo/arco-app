@@ -2154,11 +2154,15 @@ const RULES = [
       'and the association strengthens every night it is repeated.',
     evidence: 'STRONG',
     citation:
-      'Component network meta-analysis of CBT-I: cognitive restructuring remission ' +
-      'iOR 1.68 (1.28-2.20), the largest of any component. Pre-sleep arousal mediates ' +
-      'the worry-to-sleep relationship; insomnia-specific rumination correlates with ' +
-      'trait and state arousal at beta 0.22-0.24. This is education, not treatment: ' +
-      'delivered CBT-I is a clinical intervention and this is not it.',
+      'Component network meta-analysis of CBT-I measuring REMISSION: cognitive ' +
+      'restructuring incremental OR 1.68 (1.28-2.20), the largest of any component. ' +
+      'Note this is a different outcome from the severity-based analysis cited under ' +
+      'conditioned-arousal, which found no significant standalone effect for cognitive ' +
+      'therapy. Two analyses, two outcome measures, and the disagreement is real rather ' +
+      'than a slip. Pre-sleep arousal mediates the worry-to-sleep relationship; ' +
+      'insomnia-specific rumination correlates with trait and state arousal at beta ' +
+      '0.22-0.24. This is education, not treatment: delivered CBT-I is a clinical ' +
+      'intervention and this is not it.',
     fixes: [
       { cost: 'free', action: 'Write the loop down earlier in the evening, not in bed. The technique is called constructive worry and the point is to move the thinking to a time when it is useful.' },
       { cost: 'free', action: 'If your mind is going in bed, the target is the arousal rather than the content. Arguing with the thought tends to raise arousal instead of lowering it.' },
@@ -2167,34 +2171,64 @@ const RULES = [
     surprise: 9
   },
 
+  // Replaces an earlier 'sleep-effort' lever keyed on onset latency. The two overlapped on
+  // 6 of 32 answer combinations with near-identical fixes, and this one is better targeted:
+  // the clinical variable in night waking is the response to it, not the waking itself.
   {
-    id: 'sleep-effort',
+    id: 'conditioned-arousal',
     domain: 'sleep',
-    tier: 2,
-    requires: ['sleepLatency', 'resumeEasily'],
-    fires: (p) => p.sleepLatency >= 30 && p.resumeEasily === false,
-    effect: 'stimulus control remission iOR 1.43, 95% CI 1.00-2.05 — the lower bound touches 1.00',
+    tier: 1,
+    requires: ['nightWakings', 'resumeEasily'],
+    fires: (p) => p.nightWakings >= 1 && p.resumeEasily === false,
+    effect: 'sleep restriction and stimulus control are the two strongest components of CBT-I; in a component network meta-analysis of 80 studies and 15,351 participants, sleep restriction reduced insomnia severity by d = 0.45 and stimulus control improved total sleep time',
     contradiction:
-      'Lying in bed awake trying to sleep is the one situation where effort reliably ' +
-      'makes the outcome less likely.',
+      'Waking in the night is normal. Lying awake afterwards is the part worth ' +
+      'working on.',
     mechanism:
-      'Trying to sleep raises arousal, and arousal is what prevents sleep, so effort ' +
-      'is self-defeating in a way it is not almost anywhere else. Time spent awake in ' +
-      'bed also teaches the association that bed is where you lie awake.',
-    evidence: 'MODERATE',
+      'Everyone surfaces briefly at sleep cycle boundaries, several times a night. ' +
+      'The difference between people who barely notice and people who lose an hour ' +
+      'is what happens next: the bed becomes a cue for being awake, and frustration ' +
+      'about not sleeping keeps you from sleeping.',
+    evidence: 'STRONG',
     citation:
-      'Stimulus control, remission iOR 1.43 (95% CI 1.00-2.05) in component network ' +
-      'meta-analysis. Worth stating plainly that the lower bound touches 1.00 and that ' +
-      'very few studies test it in isolation, so its evidence is thinner than its ' +
-      'reputation. Sleep restriction is deliberately excluded here: it has comparable ' +
-      'support but acutely reduces total sleep and is a documented cause of dropout, ' +
-      'which makes it unsuitable for an app to hand out unsupervised.',
+      'Steinmetz et al., component network meta-analysis, 80 studies, 15,351 ' +
+      'participants. Notably, psychoeducation, relaxation therapy and cognitive ' +
+      'therapy showed no significant standalone effects. Sleep restriction is cited ' +
+      'here as evidence, not offered as a fix: it acutely reduces total sleep and is ' +
+      'a documented cause of dropout, so it is not something an app should hand out ' +
+      'unsupervised. The fixes below are stimulus control only.',
     fixes: [
-      { cost: 'free', action: 'If you have been awake a while and it is not happening, getting up and doing something dull in low light tends to work better than staying and trying harder.' },
-      { cost: 'free', action: 'Turn the clock away. Checking the time converts lying awake into arithmetic about how little sleep is left, which raises arousal.' },
-      { cost: 'free', action: 'Aim to be in bed for sleep rather than for waiting. The evidence here is real but thinner than it is usually presented, so treat it as worth trying rather than proven.' }
+      { cost: 'free', action: 'Turn the clock away. Knowing the time makes the arithmetic worse and the arithmetic is what keeps you awake.' },
+      { cost: 'free', action: 'If you have been awake around twenty minutes, get up. Somewhere else, dim light, something dull. Go back when you feel sleepy rather than when you think you should.' },
+      { cost: 'free', action: 'Stop trying. Sleep effort is self-defeating, and deliberately staying awake tends to work better than trying to drop off.' }
     ],
     surprise: 8
+  },
+
+  // The counterpart to the lever above, and the reason it exists: an engine that only
+  // speaks when something is wrong teaches people to dread opening it.
+  {
+    id: 'normal-waking',
+    domain: 'sleep',
+    tier: 2,
+    requires: ['nightWakings', 'resumeEasily'],
+    fires: (p) => p.nightWakings >= 1 && p.resumeEasily === true,
+    effect: 'roughly four minutes of continuous wakefulness is needed before an awakening is remembered the next morning',
+    contradiction:
+      'You wake in the night and get back to sleep. That is normal sleep, not ' +
+      'broken sleep.',
+    mechanism:
+      'Brief awakenings happen at every cycle boundary. Most are never remembered, ' +
+      'it takes roughly four minutes of continuous wakefulness before an awakening ' +
+      'registers the next morning.',
+    evidence: 'STRONG',
+    citation:
+      'Home actigraphy in 39 healthy adults: mean 259 seconds of continuous ' +
+      'wakefulness before an awakening was recalled, range 30 to 600 seconds.',
+    fixes: [
+      { cost: 'free', action: 'Nothing to fix here. This is what sleep looks like.' }
+    ],
+    surprise: 6
   },
 
   {
